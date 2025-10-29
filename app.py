@@ -1,22 +1,27 @@
 from flask import Flask, render_template, request, redirect, url_for, abort
-import os, sqlite3, uuid, stripe
+import os, sqlite3, uuid, stripe, sys
 from dotenv import load_dotenv
 
-# Charger les variables d'environnement
+# ------------------------------
+# CONFIGURATION
+# ------------------------------
 load_dotenv()
 
-# Config Flask
 app = Flask(__name__)
 app.secret_key = os.getenv("SECRET_KEY", "change-me")
 
 # Stripe
 stripe.api_key = os.getenv("STRIPE_SECRET_KEY")
 PRICE_ID = os.getenv("PRICE_ID")
-BASE_URL = os.getenv("BASE_URL", "https://bettybots.vercel.app")
+BASE_URL = os.getenv("BASE_URL", "https://betty-abonnement-version2.vercel.app")
 
-# Base SQLite (dans /tmp sur Vercel)
+# Base SQLite (stockée dans /tmp pour compatibilité Vercel)
 DB_PATH = "/tmp/users.db"
 
+
+# ------------------------------
+# DATABASE
+# ------------------------------
 def init_db():
     conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
@@ -33,10 +38,12 @@ def init_db():
     conn.commit()
     conn.close()
 
+
 def get_conn():
     if not os.path.exists(DB_PATH):
         init_db()
     return sqlite3.connect(DB_PATH)
+
 
 # ------------------------------
 # ROUTES
@@ -50,7 +57,7 @@ def index():
 @app.route('/config', methods=['GET', 'POST'])
 def config_page():
     if request.method == 'POST':
-        # Envoi direct vers la page d'inscription avec querystring
+        # Redirection directe avec paramètres GET
         color = request.form.get('color_hex')
         avatar = request.form.get('avatar_key')
         persona = request.form.get('persona')
@@ -81,7 +88,6 @@ def inscription():
         conn = get_conn()
         c = conn.cursor()
         bot_id = str(uuid.uuid4())
-
         c.execute("INSERT OR IGNORE INTO users (email, name, bot_id) VALUES (?, ?, ?)", (email, name, bot_id))
         conn.commit()
 
@@ -101,6 +107,7 @@ def inscription():
         conn.commit()
         conn.close()
 
+        print(f"[✅ STRIPE] Checkout lancé pour {email}")
         return redirect(checkout_session.url, code=303)
 
     return render_template('inscription.html', bot_cfg=bot_cfg)
@@ -155,11 +162,28 @@ def webhook():
         conn.commit()
         conn.close()
 
+        print(f"[💳 WEBHOOK] Paiement validé pour session {session_id}")
+
     return '', 200
 
 
 # ------------------------------
-# RUN LOCAL (pour tests)
+# LOG DE DÉMARRAGE (DEBUG)
+# ------------------------------
+def startup_log():
+    print("🚀 Betty Abonnement (Vercel Edition)")
+    print(f"🐍 Python {sys.version.split()[0]}")
+    print(f"🌍 BASE_URL : {BASE_URL}")
+    print(f"💾 Database path : {DB_PATH}")
+    print(f"💳 Stripe PRICE_ID : {PRICE_ID}")
+    print(f"📡 Routes : {[r.rule for r in app.url_map.iter_rules()]}")
+    print("=====================================")
+
+
+startup_log()
+
+# ------------------------------
+# EXECUTION LOCALE
 # ------------------------------
 if __name__ == '__main__':
     app.run(host="0.0.0.0", port=5000, debug=True)
