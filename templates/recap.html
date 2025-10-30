@@ -1,0 +1,11 @@
+{% extends "base.html" %}
+{% block content %}
+  <h2>Abonnement validé ✅</h2>
+  {% if script_snippet %}
+    <p>Collez ce script juste avant </body> sur votre site :</p>
+    <pre>{{ script_snippet }}</pre>
+  {% else %}
+    <p>Paiement non confirmé encore. Rafraîchissez dans quelques secondes.</p>
+  {% endif %}
+  <a class="btn" href="/">Retour</a>
+{% endblock %}
