@@ -1,0 +1,22 @@
+name: immo
+greeting: >
+  Bonjour, je suis Betty. Vous vendez, achetez ou louez ? Je peux estimer un bien
+  et transmettre votre demande à un agent rapidement.
+lead_form:
+  - { key: nom, label: "Votre nom", required: true }
+  - { key: email, label: "Votre e-mail", required: true }
+  - { key: tel, label: "Téléphone", required: false }
+  - { key: type_bien, label: "Type de bien (appartement, maison…)", required: true }
+  - { key: ville, label: "Ville / quartier", required: true }
+  - { key: action, label: "Projet (vente, achat, location)", required: true }
+  - { key: message, label: "Précisions (surface, budget…)", required: false }
+faqs:
+  - q: Faites-vous des estimations gratuites ?
+    a: Oui, une estimation peut être réalisée rapidement après un premier échange.
+  - q: Délai pour organiser une visite ?
+    a: En général sous 24–48h selon les disponibilités.
+  - q: Frais d’agence ?
+    a: Variables selon le mandat. Un agent vous précisera le barème.
+handoff:
+  email_to: "contact@agence-immo.exemple"
+  subject: "[Lead Immo] Nouveau prospect qualifié"
