@@ -1,0 +1,22 @@
+name: medecin
+greeting: >
+  Bonjour, je suis Betty. Je vous aide à prendre rendez-vous ou à poser une question
+  simple (horaires, nouveaux patients, spécialité).
+lead_form:
+  - { key: nom, label: "Votre nom", required: true }
+  - { key: email, label: "Votre e-mail", required: true }
+  - { key: tel, label: "Téléphone", required: false }
+  - { key: motif, label: "Motif (consultation, suivi, vaccin…)", required: true }
+  - { key: dispo, label: "Disponibilités", required: false }
+faqs:
+  - q: Prenez-vous de nouveaux patients ?
+    a: Oui, sur créneaux disponibles. Donnez-moi vos préférences de jour/heure.
+  - q: Quels sont vos horaires ?
+    a: Lundi–vendredi 9h–12h / 14h–18h (fermé jours fériés).
+  - q: Proposez-vous la téléconsultation ?
+    a: Oui, pour certains motifs. Betty vous aidera à vérifier l’éligibilité.
+  - q: Urgences ?
+    a: En cas d’urgence vitale, composez le 112. Pour le cabinet, laissez votre message.
+handoff:
+  email_to: "rdv@cabinet-medical.exemple"
+  subject: "[Lead Médecin] Demande de rendez-vous"
