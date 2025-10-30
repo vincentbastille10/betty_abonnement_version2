@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% block content %}
+  <h2>Inscription</h2>
+  {% if error %}<p style="color:#f87171">Erreur : {{error}}</p>{% endif %}
+  <form method="post">
+    <label>Nom</label>
+    <input name="name" placeholder="Votre nom" required>
+    <label>Email</label>
+    <input name="email" type="email" placeholder="vous@exemple.com" required>
+
+    <p><small>Votre script d’intégration s’affichera après le paiement.</small></p>
+    <button class="btn" type="submit">Valider et procéder au paiement</button>
+  </form>
+
+  {% if bot_cfg %}
+    <hr><pre>{{ bot_cfg | tojson(indent=2) }}</pre>
+  {% endif %}
+{% endblock %}
