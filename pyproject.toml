@@ -1,0 +1,7 @@
+[project]
+name = "betty-abonnement-version2"
+version = "0.1.0"
+requires-python = ">=3.12"
+
+[tool]
+# (vide, on n'utilise rien de particulier ici)
