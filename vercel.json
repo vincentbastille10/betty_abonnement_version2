@@ -4,9 +4,7 @@
     {
       "src": "app.py",
       "use": "@vercel/python",
-      "config": {
-        "runtime": "python3.12"
-      }
+      "config": { "runtime": "python3.12" }
     }
   ],
   "routes": [
@@ -15,21 +13,16 @@
   "env": {
     "FLASK_ENV": "production",
     "SECRET_KEY": "change-me",
-
     "STRIPE_SECRET_KEY": "sk_live_xxx",
     "STRIPE_WEBHOOK_SECRET": "whsec_xxx",
     "PRICE_ID": "price_xxx",
-    "BASE_URL": "https://betty-abonnement-version2.vercel.app",
-    "EMBED_BASE": "https://betty-abonnement-version2.vercel.app",
-
+    "BASE_URL": "https://bettyabonnementversion2.vercel.app",
+    "EMBED_BASE": "https://bettyabonnementversion2.vercel.app",
     "LLM_PROVIDER": "openai",
     "OPENAI_API_KEY": "sk-xxxxxx",
     "LLM_MODEL": "gpt-4o-mini",
     "LLM_MAX_TOKENS": "90"
   },
   "installCommand": "pip install -r requirements.txt",
-  "outputDirectory": ".",
-  "github": {
-    "silent": true
-  }
+  "github": { "silent": true }
 }
