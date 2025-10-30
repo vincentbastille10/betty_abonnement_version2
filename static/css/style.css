@@ -1,0 +1,121 @@
+x/* =============================
+   BETTY ABONNEMENT — STYLE DE BASE
+   ============================= */
+
+:root {
+  --bg: #0d1117;
+  --fg: #e5e7eb;
+  --muted: #94a3b8;
+  --card: #111827;
+  --accent: #4f46e5;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  background: var(--bg);
+  color: var(--fg);
+  font-family: "Inter", system-ui, sans-serif;
+  line-height: 1.5;
+}
+
+.container {
+  max-width: 920px;
+  margin: 0 auto;
+  padding: 32px;
+}
+
+/* --- TITRES --- */
+h1, h2, h3 {
+  color: var(--fg);
+  margin-top: 0;
+}
+
+/* --- BOUTONS --- */
+.btn {
+  background: var(--accent);
+  color: white;
+  padding: 10px 20px;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: 0.2s ease;
+  font-weight: 500;
+}
+.btn:hover {
+  filter: brightness(1.1);
+}
+
+/* --- CARDS --- */
+.card {
+  background: var(--card);
+  border: 1px solid #1f2937;
+  border-radius: 16px;
+  padding: 24px;
+  margin-top: 24px;
+  box-shadow: 0 0 30px rgba(0,0,0,0.25);
+}
+
+/* --- GRILLE --- */
+.grid {
+  display: grid;
+  gap: 16px;
+}
+.grid.cols-2 { grid-template-columns: repeat(2, 1fr); }
+.grid.cols-3 { grid-template-columns: repeat(3, 1fr); }
+
+/* --- INPUTS --- */
+label {
+  display: block;
+  margin: 8px 0 4px;
+  color: var(--muted);
+}
+input, select {
+  width: 100%;
+  padding: 10px;
+  border-radius: 8px;
+  border: 1px solid #1f2937;
+  background: #0b1220;
+  color: var(--fg);
+}
+
+/* --- AVATARS --- */
+.avatar {
+  width: 90px;
+  height: 90px;
+  border-radius: 12px;
+  object-fit: cover;
+  border: 2px solid #1f2937;
+}
+
+/* --- POINTS DE COULEUR --- */
+.color-dot {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: 2px solid #0003;
+  cursor: pointer;
+}
+
+/* --- PRE pour le script --- */
+pre {
+  background: #0b1220;
+  color: #d1d5db;
+  border-radius: 12px;
+  border: 1px solid #1f2937;
+  padding: 16px;
+  overflow-x: auto;
+  font-size: 0.9rem;
+}
+
+/* --- HEADER --- */
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 24px;
+}
