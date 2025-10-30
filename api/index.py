@@ -1,1 +1,1 @@
-from app import app  # expose l'app Flask pour Vercel
+from app import app  # expose l'objet Flask pour Vercel
