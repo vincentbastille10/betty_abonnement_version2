@@ -301,17 +301,34 @@ def recap_page():
     pack = request.args.get("pack", "avocat")
     bot_key = "avocat-001" if pack=="avocat" else ("medecin-003" if pack=="medecin" else "immo-002")
     bot = BOTS.get(bot_key, {})
-    owner = bot.get("owner_name") or "Client"
-    display_name = bot.get("name") or "Betty Bot"
-    full_name = f"{display_name} — {owner}"  # nom complet montré à l’acheteur
+
+    public_id = bot.get("public_id")
+    owner     = bot.get("owner_name") or ""
+    display   = bot.get("name") or "Betty Bot"
+
+    # si pas de public_id (ex: retour direct sans webhook Stripe en dev), on accepte un override via URL
+    public_id = request.args.get("public_id", public_id)
+    owner     = request.args.get("owner", owner)
+
+    # si toujours rien -> on affiche une note au template
+    embed_code = ""
+    if public_id:
+        full_name = f"{display} — {owner}" if owner else display
+        embed_code = (
+            f'<!-- Betty Bots — propulsé par Spectra Media AI -->\n'
+            f'<script async id="betty-widget"\n'
+            f'  src="{BASE_URL}/static/widget.js"\n'
+            f'  data-bot-id="{public_id}"\n'
+            f'  data-bot-name="{full_name}"></script>'
+        )
+
     return render_template(
         "recap.html",
-        title="Récapitulatif",
-        base_url=BASE_URL,
-        public_id=bot.get("public_id"),
-        owner=owner,
-        display_name=display_name,
-        full_name=full_name
+        pack=pack,
+        bot_name=(f"{display} — {owner}" if owner else display),
+        public_id=public_id,
+        embed_code=embed_code,
+        title="Récapitulatif"
     )
 
 @app.route("/chat")
