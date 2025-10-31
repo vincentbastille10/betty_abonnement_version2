@@ -1,128 +1,98 @@
-{% extends "base.html" %}
-{% block content %}
-
-<h1>Chat avec Betty</h1>
-
-<div class="demo-frame" style="margin-top:20px">
-  <div class="chat-frame" id="chat" style="display:flex;flex-direction:column;">
-    <div style="padding:18px 16px 10px;border-bottom:1px solid var(--border);text-align:center">
-      <img id="bot-avatar" src="" alt="Avatar"
-           style="width:72px;height:72px;border-radius:999px;border:1px solid var(--border);background:#0b0f14;object-fit:cover;display:block;margin:0 auto 8px">
-      <div id="bot-name" style="font-weight:700">Betty</div>
-    </div>
-
-    <div id="messages" style="padding:16px;overflow:auto;flex:1;scroll-behavior:smooth">
-      <div id="greet" class="bubble"
-           style="max-width:280px;background:#111827;border:1px solid var(--border);border-radius:12px;padding:12px;margin:8px 0">
-        Bonjour, je suis Betty. Comment puis-je vous aider ?
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>{{ full_name }}</title>
+  <style>
+    :root{--bg:#0b0f1e;--fg:#e5e7eb;--bot:#1f2937;--user:#334155;--acc:#4f46e5}
+    *{box-sizing:border-box} html,body{height:100%}
+    body{margin:0;background:var(--bg);color:var(--fg);font:14px/1.45 Inter,system-ui,Segoe UI,Roboto,Arial,sans-serif}
+    .wrap{display:grid;grid-template-rows:auto 1fr auto;height:100vh;max-width:860px;margin:0 auto}
+    header{display:flex;align-items:center;gap:12px;padding:12px 14px;border-bottom:1px solid rgba(255,255,255,.06)}
+    .av{width:36px;height:36px;border-radius:10px;background:#111;overflow:hidden}
+    .av img{width:100%;height:100%;object-fit:cover}
+    .title{font-weight:700}
+    .muted{opacity:.7;font-size:12px}
+    #chat{padding:16px;overflow:auto}
+    .bubble{max-width:78%;padding:10px 12px;border-radius:12px;margin:8px 0;white-space:pre-wrap}
+    .bot{background:var(--bot);border:1px solid rgba(255,255,255,.06)}
+    .user{background:var(--user);margin-left:auto;border:1px solid rgba(255,255,255,.06)}
+    form{display:flex;gap:8px;padding:12px;border-top:1px solid rgba(255,255,255,.06)}
+    input{flex:1;padding:12px 14px;border-radius:12px;border:1px solid rgba(255,255,255,.08);background:#0a1224;color:var(--fg);outline:none}
+    button{padding:12px 16px;border-radius:12px;border:0;background:linear-gradient(135deg,#4f46e5,#7c3aed);color:#fff;font-weight:700;cursor:pointer}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <div class="av"><img src="{{ avatar_url }}" alt=""></div>
+      <div>
+        <div class="title">{{ full_name }}</div>
+        <div class="muted">Propulsé par Spectra Media AI</div>
       </div>
-    </div>
+    </header>
 
-    <form id="form" style="padding:14px;border-top:1px solid var(--border);display:flex;gap:8px">
-      <input id="input" type="text" placeholder="Écrivez et appuyez sur Entrée…" autocomplete="off" autofocus
-             style="background:#0b0f14;border:1px solid var(--border);border-radius:10px;color:var(--text);padding:12px;flex:1">
-      <button class="btn" type="submit">Envoyer</button>
+    <main id="chat"></main>
+
+    <form id="f" autocomplete="off">
+      <input id="m" placeholder="Écrivez votre message…" />
+      <button type="submit">Envoyer</button>
     </form>
   </div>
-</div>
 
-<script>
-  const botId = new URLSearchParams(location.search).get('bot_id') || 'avocat-001';
+  <script>
+    // --- Identité bot / conv ---
+    const PUBLIC_ID = "{{ public_id }}";
+    const BASE      = "{{ base_url }}";
+    const KEY       = "betty_cid_" + PUBLIC_ID;
 
-  const avatarEl = document.getElementById('bot-avatar');
-  const nameEl   = document.getElementById('bot-name');
-  const greetEl  = document.getElementById('greet');
-  const msgs     = document.getElementById('messages');
-  const form     = document.getElementById('form');
-  const input    = document.getElementById('input');
+    // ❶ Génère et persiste un ID de conversation côté client (localStorage)
+    let CONV_ID = localStorage.getItem(KEY);
+    if (!CONV_ID) {
+      CONV_ID = (crypto && crypto.randomUUID) ? crypto.randomUUID()
+             : (Date.now().toString(36) + Math.random().toString(36).slice(2,10));
+      localStorage.setItem(KEY, CONV_ID);
+    }
 
-  // Focus intelligent : taper n'importe où = focus sur l'input
-  document.addEventListener('keydown', (e) => {
-    const ign = ['Enter','Escape','Tab'];
-    if (ign.includes(e.key)) return;
-    if (document.activeElement !== input) {
-      input.focus();
-      if (e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey) {
-        e.preventDefault();
-        input.value += e.key;
+    // --- UI helpers ---
+    const chat = document.getElementById('chat');
+    const f = document.getElementById('f');
+    const m = document.getElementById('m');
+
+    function add(msg, cls){
+      const b = document.createElement('div');
+      b.className = 'bubble '+cls;
+      b.textContent = msg;
+      chat.appendChild(b);
+      chat.scrollTop = chat.scrollHeight;
+    }
+    function stripLead(s){ return (s||"").replace(/\s*<LEAD_JSON>[\s\S]*?<\/LEAD_JSON>\s*/g,'').trim(); }
+
+    // Message d'accueil
+    add("{{ greeting|e }}", "bot");
+
+    f.addEventListener('submit', async (e)=>{
+      e.preventDefault();
+      const t = m.value.trim(); if(!t) return;
+      add(t, 'user'); m.value='';
+
+      try{
+        const r = await fetch(`${BASE}/api/bettybot`, {
+          method:'POST',
+          headers:{'Content-Type':'application/json'},
+          body: JSON.stringify({
+            message: t,
+            public_id: PUBLIC_ID,
+            conv_id: CONV_ID
+          })
+        });
+        const j = await r.json();
+        add(stripLead(j.response || '…'), 'bot');
+      }catch(err){
+        add("⚠️ Erreur réseau.", "bot");
       }
-    }
-  });
-
-  function scrollToBottom(){ msgs.scrollTop = msgs.scrollHeight; }
-
-  // Meta bot
-  fetch(`/api/bot_meta?bot_id=${encodeURIComponent(botId)}`)
-    .then(r => r.json())
-    .then(meta => {
-      nameEl.textContent = meta.name || 'Betty';
-      avatarEl.src = meta.avatar_url || '';
-      if (meta.greeting) greetEl.textContent = meta.greeting;
-      document.documentElement.style.setProperty('--primary', meta.color_hex || '#4F46E5');
-      scrollToBottom();
-    }).catch(()=>{});
-
-  // Bulle
-  function addBubble(text, mine=false){
-    const div = document.createElement('div');
-    div.className = 'bubble';
-    div.style.maxWidth = '280px';
-    div.style.border = '1px solid var(--border)';
-    div.style.borderRadius = '12px';
-    div.style.padding = '12px';
-    div.style.margin = '8px 0';
-    div.style.whiteSpace = 'pre-wrap';
-    div.textContent = text;
-    if(mine){ div.style.background='#1b2230'; div.style.marginLeft='auto'; }
-    else    { div.style.background='#111827'; div.style.marginRight='auto'; }
-    msgs.appendChild(div);
-    scrollToBottom();
-    return div;
-  }
-
-  // Loader "Betty écrit…"
-  function showTyping(){
-    const t = document.createElement('div');
-    t.className = 'bubble typing';
-    t.style.maxWidth = '280px';
-    t.style.border = '1px solid var(--border)';
-    t.style.borderRadius = '12px';
-    t.style.padding = '12px';
-    t.style.margin = '8px 0';
-    t.style.background = '#111827';
-    t.style.marginRight = 'auto';
-    t.innerHTML = '<span class="label">Betty écrit</span><span class="dots"><i></i><i></i><i></i></span>';
-    msgs.appendChild(t);
-    scrollToBottom();
-    return t;
-  }
-  function hideTyping(el){ if(el && el.parentNode) el.parentNode.removeChild(el); }
-
-  // Submit
-  form.addEventListener('submit', async (e)=>{
-    e.preventDefault();
-    const text = input.value.trim();
-    if(!text) return;
-    addBubble(text, true);
-    input.value = '';
-
-    const typing = showTyping();
-    try {
-      const r = await fetch('/api/bettybot', {
-        method:'POST',
-        headers:{'Content-Type':'application/json'},
-        body: JSON.stringify({ message: text, bot_id: botId })
-      });
-      const j = await r.json();
-      hideTyping(typing);
-      addBubble(j.response || "Désolé, une erreur est survenue.");
-    } catch {
-      hideTyping(typing);
-      addBubble("Désolé, une erreur est survenue.");
-    }
-  });
-
-  window.addEventListener('load', ()=>{ input.focus(); scrollToBottom(); });
-</script>
-
-{% endblock %}
+    });
+  </script>
+</body>
+</html>
