@@ -1,15 +1,10 @@
 # app.py
 from flask import Flask, render_template, request, jsonify, redirect, url_for, session
 import os, yaml, requests, re, stripe, json
-import uuid, hashlib  # <-- ajout
+import uuid, hashlib
 
 app = Flask(__name__)
 app.secret_key = os.getenv("FLASK_SECRET_KEY", "dev-secret-change-me")
-
-# Expose BASE_URL dans les templates si besoin
-def _expose_base_url():
-    app.jinja_env.globals['BASE_URL'] = BASE_URL
-_expose_base_url()
 
 # =========================
 # CONFIG (env)
@@ -26,6 +21,17 @@ PRICE_ID = os.getenv("STRIPE_PRICE_ID", "").strip()  # abonnement 29,99 €/mois
 
 # Base URL (utile pour success/cancel Stripe et l’embed)
 BASE_URL = (os.getenv("BASE_URL", "http://127.0.0.1:5000")).rstrip("/")
+
+# Mailjet (optionnel)
+MJ_API_KEY    = os.getenv("MJ_API_KEY", "").strip()
+MJ_API_SECRET = os.getenv("MJ_API_SECRET", "").strip()
+MJ_FROM_EMAIL = os.getenv("MJ_FROM_EMAIL", "no-reply@spectramedia.ai").strip()
+MJ_FROM_NAME  = os.getenv("MJ_FROM_NAME", "Spectra Media AI").strip()
+
+# Expose BASE_URL dans les templates (après définition de BASE_URL)
+def _expose_base_url():
+    app.jinja_env.globals['BASE_URL'] = BASE_URL
+_expose_base_url()
 
 # =========================
 # HELPERS
@@ -59,12 +65,8 @@ def build_business_block(profile: dict) -> str:
     return "\n".join(lines)
 
 def build_system_prompt(pack_name: str, profile: dict, greeting: str = "") -> str:
-    """
-    Prompt entonnoir + LEAD_JSON.
-    """
     base = load_pack_prompt(pack_name)
     biz  = build_business_block(profile)
-
     guide = f"""
 Tu es **Betty**, assistante {pack_name}. Objectif prioritaire : **QUALIFIER** le prospect puis **proposer un rendez-vous**.
 
@@ -91,12 +93,8 @@ Réponds **normalement** au-dessus, puis juste la ligne <LEAD_JSON> à la fin.
     return f"{base}\n{biz}\n{guide}\n{greet}"
 
 def query_llm(user_input: str, pack_name: str, profile: dict = None, greeting: str = "") -> str:
-    """
-    Appel simple (sans historique) à Together /chat/completions
-    """
     if not TOGETHER_API_KEY:
         return "⚠️ Clé Together absente côté serveur. Ajoutez TOGETHER_API_KEY dans vos variables d’environnement."
-
     headers = {"Authorization": f"Bearer {TOGETHER_API_KEY}", "Content-Type": "application/json"}
     system_prompt = build_system_prompt(pack_name, profile or {}, greeting)
     payload = {
@@ -129,23 +127,13 @@ def query_llm(user_input: str, pack_name: str, profile: dict = None, greeting: s
         return f"⚠️ Exception serveur: {type(e).__name__}: {e}"
 
 def call_llm_with_history(system_prompt: str, history: list, user_input: str) -> str:
-    """
-    Variante avec historique court (limite les redites).
-    """
     if not TOGETHER_API_KEY:
         return "⚠️ Clé Together absente côté serveur. Ajoutez TOGETHER_API_KEY."
     headers = {"Authorization": f"Bearer {TOGETHER_API_KEY}", "Content-Type": "application/json"}
-
     messages = [{"role": "system", "content": system_prompt}]
     messages.extend(history or [])
     messages.append({"role": "user", "content": user_input})
-
-    payload = {
-        "model": LLM_MODEL,
-        "max_tokens": LLM_MAX_TOKENS,
-        "temperature": 0.4,
-        "messages": messages
-    }
+    payload = {"model": LLM_MODEL, "max_tokens": LLM_MAX_TOKENS, "temperature": 0.4, "messages": messages}
     try:
         r = requests.post(TOGETHER_API_URL, headers=headers, json=payload, timeout=30)
         if not r.ok:
@@ -167,24 +155,19 @@ def call_llm_with_history(system_prompt: str, history: list, user_input: str) ->
         return f"⚠️ Exception serveur: {type(e).__name__}: {e}"
 
 def parse_contact_info(text: str) -> dict:
-    """Heuristiques simples pour extraire téléphone/email/adresse/horaires/nom depuis un champ libre."""
     if not text:
         return {}
     d = {}
-    m = re.search(r'(\+?\d[\d\s\.\-]{6,})', text);                  d["phone"]   = m.group(1) if m else None
-    m = re.search(r'[\w\.-]+@[\w\.-]+\.\w+', text);                 d["email"]   = m.group(0) if m else None
-    m = re.search(r'horaires?\s*:\s*(.+)', text, re.I);             d["hours"]   = m.group(1).strip() if m else None
+    m = re.search(r'(\+?\d[\d\s\.\-]{6,})', text);                   d["phone"]   = m.group(1) if m else None
+    m = re.search(r'[\w\.-]+@[\w\.-]+\.\w+', text);                  d["email"]   = m.group(0) if m else None
+    m = re.search(r'horaires?\s*:\s*(.+)', text, re.I);              d["hours"]   = m.group(1).strip() if m else None
     m = re.search(r'(rue|avenue|bd|boulevard|place).+', text, re.I); d["address"] = m.group(0).strip() if m else None
-    m = re.search(r'(nom|cabinet|agence)\s*:\s*(.+)', text, re.I);  d["name"]    = m.group(2).strip() if m else None
+    m = re.search(r'(nom|cabinet|agence)\s*:\s*(.+)', text, re.I);   d["name"]    = m.group(2).strip() if m else None
     return {k: v for k, v in d.items() if v}
 
 LEAD_TAG_RE = re.compile(r"<LEAD_JSON>(\{.*?\})</LEAD_JSON>$")
 
 def extract_lead_json(text: str):
-    """
-    Extrait et retire la ligne LEAD_JSON de la réponse.
-    Retourne (message_sans_tag, lead_dict_ou_None)
-    """
     if not text:
         return text, None
     m = LEAD_TAG_RE.search(text)
@@ -200,9 +183,38 @@ def extract_lead_json(text: str):
 
 def send_lead_email(to_email: str, lead: dict, bot_name: str = "Betty Bot"):
     """
-    Stub d'envoi email lead (à implémenter en prod : SMTP / Mailjet / SendGrid).
+    Envoi via Mailjet si configuré, sinon no-op avec log.
     """
-    print("[LEAD] Envoi (demo) à", to_email, "lead=", lead, "via", bot_name)
+    if not (MJ_API_KEY and MJ_API_SECRET and to_email):
+        print("[LEAD][MAILJET] Config manquante ou email vide, email non envoyé.")
+        return
+    subject = f"Nouveau lead qualifié via {bot_name}"
+    text = (
+        f"Motif        : {lead.get('reason','')}\n"
+        f"Nom          : {lead.get('name','')}\n"
+        f"Email        : {lead.get('email','')}\n"
+        f"Téléphone    : {lead.get('phone','')}\n"
+        f"Disponibilités : {lead.get('availability','')}\n"
+        f"Statut       : {lead.get('stage','')}\n"
+    )
+    payload = {
+        "Messages": [{
+            "From": {"Email": MJ_FROM_EMAIL, "Name": MJ_FROM_NAME},
+            "To":   [{"Email": to_email}],
+            "Subject": subject,
+            "TextPart": text
+        }]
+    }
+    try:
+        r = requests.post(
+            "https://api.mailjet.com/v3.1/send",
+            auth=(MJ_API_KEY, MJ_API_SECRET),
+            json=payload,
+            timeout=15
+        )
+        print("[LEAD][MAILJET]", "OK" if r.ok else f"KO {r.status_code} {r.text[:120]}")
+    except Exception as e:
+        print("[LEAD][MAILJET][EXC]", type(e).__name__, e)
 
 # =========================
 # MINI-DB (démo) AVEC owner/public_id
@@ -214,7 +226,6 @@ BOTS = {
 }
 
 def _gen_public_id(email: str, bot_key: str) -> str:
-    # stable & anonymisé :  botkey-XXXXXXXX
     h = hashlib.sha1((email + "|" + bot_key).encode()).hexdigest()[:8]
     return f"{bot_key}-{h}"
 
@@ -290,7 +301,6 @@ def recap_page():
     pack = request.args.get("pack", "avocat")
     bot_key = "avocat-001" if pack=="avocat" else ("medecin-003" if pack=="medecin" else "immo-002")
     bot = BOTS.get(bot_key, {})
-    # Passe public_id/owner aux templates pour générer le code embed personnalisé
     return render_template(
         "recap.html",
         pack=pack,
@@ -315,11 +325,8 @@ def bettybot_reply():
     if not user_input:
         return jsonify({"response": "Dites-moi ce dont vous avez besoin 🙂"}), 200
 
-    # bot_id peut être déjà l'interne ("immo-002") si ton embed l'envoie ainsi
     bot = BOTS.get(bot_id)
     if not bot:
-        # tolérance si un jour tu décides d'envoyer un public_id complet ici
-        # on réduit à la clé interne "pack-###"
         try:
             parts = bot_id.split("-")
             internal = "-".join(parts[:2])
@@ -327,10 +334,9 @@ def bettybot_reply():
         except Exception:
             bot = BOTS["avocat-001"]
 
-    # --- mémoire courte pour limiter les redites ---
     key = f"conv_{bot_id}"
     history = session.get(key, [])
-    history = history[-6:]  # 3 tours précédents max
+    history = history[-6:]
 
     system_prompt = build_system_prompt(bot["pack"], bot.get("profile", {}), bot.get("greeting", ""))
     full_text = call_llm_with_history(system_prompt=system_prompt, history=history, user_input=user_input)
@@ -362,7 +368,6 @@ def bot_meta():
         "greeting": bot.get("greeting", "")
     })
 
-# --- nouvel endpoint public utilisé par l’embed ---
 @app.route("/api/embed_meta")
 def embed_meta():
     public_id = (request.args.get("public_id") or "").strip()
@@ -372,7 +377,7 @@ def embed_meta():
     if not bot:
         return jsonify({"error":"bot_not_found"}), 404
     return jsonify({
-        "bot_id": public_id,  # ID public à réutiliser côté client
+        "bot_id": public_id,
         "owner_name": bot.get("owner_name") or "Client",
         "display_name": bot.get("name") or "Betty Bot",
         "color_hex": bot.get("color") or "#4F46E5",
@@ -380,20 +385,15 @@ def embed_meta():
         "greeting": bot.get("greeting") or "Bonjour, je suis Betty. Comment puis-je vous aider ?"
     })
 
-# Endpoint santé (utile pour Vercel)
 @app.route("/healthz")
 def healthz():
     return "ok", 200
 
-# Reset conversation (démo)
 @app.route("/api/reset", methods=["POST"])
 def reset_conv():
     bot_id = (request.get_json(silent=True) or {}).get("bot_id", "avocat-001")
     session.pop(f"conv_{bot_id}", None)
     return jsonify({"ok": True})
 
-# =========================
-# RUN (local)
-# =========================
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000, debug=True)
