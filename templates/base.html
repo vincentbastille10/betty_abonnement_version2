@@ -1,33 +1,29 @@
 <!DOCTYPE html>
 <html lang="fr">
 <head>
-  <meta charset="UTF-8" />
-  <title>{{ title or "Betty Bot" }}</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta charset="UTF-8">
+  <title>{{ title or "Betty Bots" }}</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
   <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
-  <!-- Favicons (si présents dans /static) -->
   <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
   <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png">
   <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png">
   <link rel="manifest" href="/site.webmanifest">
+  <meta name="theme-color" content="#0d1117">
 </head>
+
 <body>
-  <header class="site-header">
-    <div class="container">
-      <div class="brand">Betty Bots</div>
-      <nav>
-        <a href="{{ url_for('index') }}">Accueil</a>
-        <a href="{{ url_for('config_page') }}">Configurer</a>
-      </nav>
-    </div>
+  <header>
+    <h1 class="site-title">🪄 Betty Bots</h1>
   </header>
 
   <main class="container">
     {% block content %}{% endblock %}
   </main>
 
-  <footer class="site-footer">
-    <div class="container">© {{ 2025 }} Spectra Media AI — Tous droits réservés</div>
+  <footer>
+    <p>© 2025 Spectra Media AI — Tous droits réservés.</p>
   </footer>
 </body>
 </html>
+
