@@ -1,62 +1,35 @@
 {% extends "base.html" %}
-{% block title %}Chat — Betty{% endblock %}
 {% block content %}
-<div class="card">
-  <h2>Betty — {{ pack_name|capitalize }}</h2>
-  <div id="chat-box" style="height:360px;overflow:auto;background:#0b1220;border:1px solid #1f2937;border-radius:12px;padding:12px"></div>
-
-  <div style="margin-top:12px;display:flex;gap:8px">
-    <input id="chat-input" placeholder="Posez votre question..." style="flex:1" />
-    <button id="chat-send" class="btn">Envoyer</button>
-  </div>
+<div id="chat-container">
+  <div id="chat-messages"></div>
+  <form id="chat-form">
+    <input type="text" id="user-input" placeholder="Écrivez ici..." autocomplete="off">
+    <button type="submit">Envoyer</button>
+  </form>
 </div>
-
 <script>
-(function(){
-  const pack = "{{ pack_name }}";
-  const persona = "{{ persona }}";
-  const greeting = {{ greeting|tojson }};
-  const box = document.getElementById('chat-box');
-  const input = document.getElementById('chat-input');
-  const send = document.getElementById('chat-send');
+const botId = new URLSearchParams(window.location.search).get('bot_id');
 
-  const messages = [{ role: "assistant", content: greeting }];
+async function sendMessage(message) {
+  const res = await fetch("/api/bettybot", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ message, bot_id: botId })
+  });
+  const data = await res.json();
+  return data.response;
+}
 
-  function render() {
-    box.innerHTML = "";
-    for (const m of messages) {
-      const p = document.createElement('p');
-      p.textContent = (m.role === "user" ? "👤 " : "🤖 ") + m.content;
-      box.appendChild(p);
-    }
-    box.scrollTop = box.scrollHeight;
-  }
-
-  async function ask() {
-    const text = input.value.trim();
-    if (!text) return;
-    messages.push({ role: "user", content: text });
-    input.value = "";
-    render();
-
-    try {
-      const r = await fetch("/api/ask", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ messages, pack, persona })
-      });
-      const data = await r.json();
-      messages.push({ role: "assistant", content: data.reply || "(aucune réponse)"});  
-    } catch(e) {
-      messages.push({ role: "assistant", content: "[Erreur réseau]" });
-    }
-    render();
-  }
-
-  send.addEventListener('click', ask);
-  input.addEventListener('keydown', (e)=>{ if(e.key==='Enter') ask(); });
-
-  render();
-})();
+document.querySelector("#chat-form").addEventListener("submit", async e => {
+  e.preventDefault();
+  const input = document.querySelector("#user-input");
+  const msg = input.value;
+  input.value = "";
+  const response = await sendMessage(msg);
+  document.querySelector("#chat-messages").innerHTML += `
+    <div class="user">${msg}</div>
+    <div class="bot">${response}</div>
+  `;
+});
 </script>
 {% endblock %}
