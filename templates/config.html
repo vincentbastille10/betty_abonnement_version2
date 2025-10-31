@@ -1,34 +1,38 @@
 {% extends "base.html" %}
 {% block content %}
-  <h2>Configuration du bot</h2>
-  <form method="post">
-    <label>Couleur</label>
-    <div>
-      {% for hex in palette %}
-        <label style="display:inline-block;margin:6px">
-          <input type="radio" name="color_hex" value="{{hex}}" {% if loop.first %}checked{% endif %}>
-          <span style="display:inline-block;width:20px;height:20px;border-radius:50%;background:{{hex}}"></span>
-        </label>
-      {% endfor %}
-    </div>
+<h1>Configurer votre chatbot</h1>
 
-    <label>Avatar (lié au pack)</label>
-    <div>
-      <label><input type="radio" name="avatar_key" value="avocat" checked> Avocat</label>
-      <label><input type="radio" name="avatar_key" value="medecin"> Médecin/Dentiste</label>
-      <label><input type="radio" name="avatar_key" value="immo"> Agent immo</label>
-    </div>
-
-    <label>Caractère</label>
-    <select name="persona">
-      {% for p in personas %}<option value="{{p}}">{{p}}</option>{% endfor %}
+<form class="form" method="post">
+  <label>
+    Pack métier
+    <select name="pack" required>
+      <option value="avocat">Avocat</option>
+      <option value="medecin">Médecin</option>
+      <option value="immo">Immobilier</option>
     </select>
+  </label>
 
-    <label>Pack métier</label>
-    <select name="pack">
-      {% for p in packs %}<option value="{{p}}">{{p}}</option>{% endfor %}
+  <label>
+    Couleur (6 choix)
+    <select name="color" required>
+      <option value="#4F46E5">Indigo</option>
+      <option value="#16A34A">Vert</option>
+      <option value="#0284C7">Bleu</option>
+      <option value="#F59E0B">Orange</option>
+      <option value="#DC2626">Rouge</option>
+      <option value="#9333EA">Violet</option>
     </select>
+  </label>
 
-    <button class="btn" type="submit">Enregistrer et payer</button>
-  </form>
+  <label>
+    Avatar (nom de fichier dans /static)
+    <select name="avatar">
+      <option value="avocat.png">avocat.png</option>
+      <option value="medecin.png">medecin.png</option>
+      <option value="immo.png">immo.png</option>
+    </select>
+  </label>
+
+  <button class="btn primary" type="submit">Enregistrer et payer</button>
+</form>
 {% endblock %}
