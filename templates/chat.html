@@ -1,70 +1,101 @@
 {% extends "base.html" %}
 {% block content %}
-<div class="chat-wrap">
-  <div class="chat-header">
-    <img id="bot-avatar" alt="Avatar" />
-    <div id="bot-title">Betty</div>
+<h1>✨ Betty Bots</h1>
+
+<div class="demo-frame">
+  <div class="chat-frame" id="chat">
+    <div style="padding:16px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px">
+      <img id="bot-avatar" src="" alt="Avatar" style="width:36px;height:36px;border-radius:999px;border:1px solid var(--border);background:#0b0f14;object-fit:cover">
+      <div>
+        <div id="bot-name" style="font-weight:700">Betty</div>
+        <div id="bot-pack" style="font-size:12px;color:var(--muted)"></div>
+      </div>
+    </div>
+
+    <div id="messages" style="padding:16px;overflow:auto;height:390px">
+      <div id="greet" class="bubble" style="max-width:280px;background:#111827;border:1px solid var(--border);border-radius:12px;padding:12px;margin-bottom:10px">
+        Bonjour, je suis Betty. Comment puis-je vous aider ?
+      </div>
+    </div>
+
+    <form id="form" style="padding:16px;border-top:1px solid var(--border)">
+      <input id="input" type="text" placeholder="Écrivez et appuyez sur Entrée…" autocomplete="off">
+      <button class="btn" style="margin-left:8px" type="submit">Envoyer</button>
+    </form>
   </div>
-  <div id="chat-messages" class="chat-messages"></div>
-  <form id="chat-form" class="chat-form" autocomplete="off">
-    <input id="user-input" type="text" placeholder="Écrivez et appuyez sur Entrée…" />
-    <button type="submit" class="btn">Envoyer</button>
-  </form>
 </div>
 
 <script>
-const params = new URLSearchParams(window.location.search);
-const botId = params.get('bot_id') || 'avocat-001';
+  const qs = new URLSearchParams(location.search);
+  const botId = qs.get('bot_id') || 'avocat-001';
 
-const avatarEl = document.getElementById('bot-avatar');
-const titleEl  = document.getElementById('bot-title');
-const msgsEl   = document.getElementById('chat-messages');
-const formEl   = document.getElementById('chat-form');
-const inputEl  = document.getElementById('user-input');
+  // UI refs
+  const avatarEl = document.getElementById('bot-avatar');
+  const nameEl   = document.getElementById('bot-name');
+  const packEl   = document.getElementById('bot-pack');
+  const greetEl  = document.getElementById('greet');
+  const msgs     = document.getElementById('messages');
+  const form     = document.getElementById('form');
+  const input    = document.getElementById('input');
 
-function pushMsg(text, who) {
-  const wrap = document.createElement('div');
-  wrap.className = 'msg ' + (who === 'user' ? 'user' : 'bot');
-  wrap.textContent = text;
-  msgsEl.appendChild(wrap);
-  msgsEl.scrollTop = msgsEl.scrollHeight;
-}
+  // Charge meta (nom, avatar, couleur, greeting, etc.)
+  fetch(`/api/bot_meta?bot_id=${encodeURIComponent(botId)}`)
+    .then(r => r.json())
+    .then(meta => {
+      nameEl.textContent = meta.name || 'Betty';
+      packEl.textContent = `ID: ${botId}`;
+      avatarEl.src = meta.avatar_url || '';
+      if (meta.greeting) greetEl.textContent = meta.greeting;
+      // Couleur d’accent
+      document.documentElement.style.setProperty('--primary', meta.color_hex || '#4F46E5');
+    })
+    .catch(() => { /* silencieux */ });
 
-async function loadMeta() {
-  try {
-    const r = await fetch(`/api/bot_meta?bot_id=${encodeURIComponent(botId)}`);
-    if (!r.ok) return;
-    const meta = await r.json();
-    if (meta.name)  titleEl.textContent = meta.name;
-    if (meta.avatar_url) avatarEl.src = meta.avatar_url;
-  } catch(_){}
-}
-loadMeta();
-pushMsg("Bonjour, je suis Betty. Comment puis-je vous aider ?", "bot");
-
-let busy = false;
-formEl.addEventListener('submit', async (e) => {
-  e.preventDefault();
-  const text = (inputEl.value || "").trim();
-  if (!text || busy) return;
-  pushMsg(text, 'user');
-  inputEl.value = '';
-  busy = true;
-
-  try {
-    const res = await fetch('/api/bettybot', {
-      method: 'POST',
-      headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({ message: text, bot_id: botId })
-    });
-    const data = await res.json();
-    pushMsg((data && data.response) ? data.response : "Désolé, une erreur est survenue.", 'bot');
-  } catch (_) {
-    pushMsg("Erreur réseau. Réessayez dans un instant.", 'bot');
-  } finally {
-    busy = false;
-    inputEl.focus();
+  function addBubble(text, mine=false){
+    const div = document.createElement('div');
+    div.className = 'bubble';
+    div.style.maxWidth = '280px';
+    div.style.border = '1px solid var(--border)';
+    div.style.borderRadius = '12px';
+    div.style.padding = '12px';
+    div.style.margin = '8px 0';
+    div.style.whiteSpace = 'pre-wrap';
+    div.textContent = text;
+    if(mine){
+      div.style.background = '#1b2230';
+      div.style.marginLeft = 'auto';
+    } else {
+      div.style.background = '#111827';
+      div.style.marginRight = 'auto';
+    }
+    msgs.appendChild(div);
+    msgs.scrollTop = msgs.scrollHeight;
   }
-});
+
+  form.addEventListener('submit', async (e)=>{
+    e.preventDefault();
+    const text = input.value.trim();
+    if(!text) return;
+    addBubble(text, true);
+    input.value = '';
+
+    try {
+      const r = await fetch('/api/bettybot', {
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ message: text, bot_id: botId })
+      });
+      const j = await r.json();
+      addBubble(j.response || "Désolé, une erreur est survenue.");
+    } catch {
+      addBubble("Désolé, une erreur est survenue.");
+    }
+  });
 </script>
+
+<style>
+  .chat-frame input{
+    background:#0b0f14;border:1px solid var(--border);border-radius:10px;color:var(--text);padding:10px;width:calc(100% - 96px)
+  }
+</style>
 {% endblock %}
