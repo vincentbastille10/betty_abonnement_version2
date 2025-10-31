@@ -21,41 +21,28 @@
     h1{margin:0;font-size:clamp(22px,3vw,28px);font-weight:800;letter-spacing:.2px}
     .sub{margin:0;color:var(--muted);font-size:13px}
     .grid{display:grid;grid-template-columns:1.1fr .9fr;gap:22px}
-    @media (max-width: 980px){.grid{grid-template-columns:1fr}}
+    @media (max-width:980px){.grid{grid-template-columns:1fr}}
     .card{background:rgba(18,20,42,.76);border:1px solid rgba(255,255,255,.06);border-radius:16px;padding:20px;box-shadow:0 16px 60px rgba(0,0,0,.35), inset 0 1px 0 rgba(255,255,255,.03)}
     .title{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
     .title h2{margin:0;font-size:16px;font-weight:700}
     .badge{display:inline-flex;gap:8px;align-items:center;font-size:12px;background:rgba(16,185,129,.18);color:#b6f1da;border:1px solid rgba(16,185,129,.35);padding:6px 10px;border-radius:999px}
     label{display:block;font-size:12px;color:#cdd4e5;margin:12px 0 6px}
-    input{width:100%;padding:12px 14px;border-radius:12px;border:1px solid rgba(255,255,255,.08);background:rgba(7,9,22,.65);color:var(--text);outline:none}
-    input[readonly]{opacity:.85}
+    input{width:100%;padding:12px 14px;border-radius:12px;border:1px solid rgba(255,255,255,.08);background:rgba(7,9,22,.65);color:var(--text)}
+    input[readonly]{opacity:.9}
+    .tabs{display:flex;gap:10px;margin:12px 0 6px}
+    .tab{padding:8px 12px;border-radius:999px;border:1px solid rgba(255,255,255,.08);cursor:pointer;font-size:12px}
+    .tab[aria-selected="true"]{background:linear-gradient(135deg,var(--brand1),var(--brand2));border-color:transparent}
     .codebox{position:relative}
-    textarea.code{width:100%;min-height:210px;max-height:340px;padding:14px 14px 46px;border-radius:14px;border:1px solid rgba(255,255,255,.08);background:linear-gradient(180deg,rgba(9,12,24,.88),rgba(7,9,18,.9));color:#e5e7eb;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12.5px;line-height:1.5;resize:vertical;overflow:auto;white-space:pre}
+    textarea.code{width:100%;min-height:220px;padding:14px 14px 50px;border-radius:14px;border:1px solid rgba(255,255,255,.08);background:linear-gradient(180deg,rgba(9,12,24,.88),rgba(7,9,18,.9));color:#e5e7eb;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12.5px;line-height:1.5;resize:vertical}
     .copyBar{position:absolute;right:8px;bottom:8px;display:flex;gap:8px}
-    .btn{appearance:none;border:none;padding:11px 14px;border-radius:12px;font-weight:700;cursor:pointer;transition:.2s}
-    .btn.primary{background:linear-gradient(135deg,var(--brand1),var(--brand2));color:#fff;box-shadow:0 0 0 2px rgba(79,70,229,.35), 0 10px 30px rgba(79,70,229,.25)}
-    .previewWrap{background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.06);border-radius:16px;padding:14px}
-    iframe{width:100%;height:540px;border:0;border-radius:12px;background:#0b0f1e}
+    .btn{appearance:none;border:none;padding:10px 14px;border-radius:12px;font-weight:700;cursor:pointer;transition:.2s}
+    .btn.primary{background:linear-gradient(135deg,var(--brand1),var(--brand2));color:#fff}
     .small{font-size:12px;color:#aab1c2}
+    .previewWrap{background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.06);border-radius:16px;padding:14px}
+    iframe#live{width:100%;height:560px;border:0;border-radius:12px;background:#0b0f1e}
   </style>
 </head>
 <body>
-  {% set base = (base_url or BASE_URL)|default('', true) %}
-  {% set base = base.rstrip('/') %}
-  {% set pack = (pack or 'immo') %}
-  {% set PACK_LABELS = {'avocat':'Avocat','immo':'Immobilier','medecin':'Médecin'} %}
-  {% set pack_label = PACK_LABELS.get(pack, pack|capitalize) %}
-  {% set id   = (public_id or '') %}
-  {% set bot_fullname = 'Betty Bot (' ~ pack_label ~ ')' %}
-  {% set embed_code -%}
-<!-- Betty Bot AI — propulsé par Spectra Media AI -->
-<script async id="betty-bot"
-  src="{{ base }}/static/widget.js"
-  data-public-id="{{ id }}"
-  data-bot-name="{{ bot_fullname }}">
-</script>
-  {%- endset %}
-
   <div class="wrap">
     <div class="head">
       <div class="logo" aria-hidden="true">
@@ -77,73 +64,121 @@
       <!-- GAUCHE -->
       <section class="card">
         <div class="title">
-          <h2>Code d’intégration</h2>
+          <h2>Code d'intégration</h2>
           <span class="badge" id="state">• prêt à copier</span>
         </div>
 
         <label>Nom complet du bot</label>
-        <input id="botName" value="{{ bot_fullname }}" readonly>
+        <input id="botFull" readonly>
 
-        <label for="code">Collez ce code juste avant <code>&lt;/body&gt;</code> de votre site</label>
-        <div class="codebox">
-          <textarea id="code" class="code" readonly>{{ embed_code | safe }}</textarea>
-          <div class="copyBar"><button class="btn primary" id="copy">Copier</button></div>
+        <div class="tabs" role="tablist" aria-label="Modes d’intégration">
+          <button class="tab" id="t-iframe" role="tab" aria-selected="true">Intégration (iframe — Wix recommandé)</button>
+          <button class="tab" id="t-script" role="tab" aria-selected="false">Avancé (snippet &lt;script&gt;)</button>
         </div>
 
-        <p class="small">
-          Ce code installe **Betty Bot AI** (pack <strong>{{ pack_label }}</strong>) pour votre site, reliée à votre identifiant public
-          <code>{{ id }}</code>. Aucun réglage supplémentaire n’est requis.
+        <label for="code">Collez ce code juste avant <code>&lt;/body&gt;</code> (ou dans un bloc “HTML” Wix)</label>
+        <div class="codebox">
+          <textarea id="code" class="code" readonly></textarea>
+          <div class="copyBar">
+            <button class="btn primary" id="copy">Copier</button>
+          </div>
+        </div>
+
+        <p class="small" id="helper">
+          Mode <strong>iframe</strong> : compatible Wix, Squarespace, Webflow.  
+          Le code pointe vers <code>{{ base_url }}</code> avec votre <em>identifiant public</em>.
         </p>
       </section>
 
       <!-- DROITE -->
       <aside class="card">
         <div class="title"><h2>Aperçu</h2><span class="sub">Simulation embarquée</span></div>
-        <div class="previewWrap"><iframe id="live" title="Aperçu du bot"></iframe></div>
+        <div class="previewWrap">
+          <iframe id="live" title="Aperçu Betty Bot"></iframe>
+        </div>
       </aside>
     </div>
   </div>
 
   <script>
-  document.addEventListener('DOMContentLoaded', function () {
-    const codeEl  = document.getElementById('code');
-    const copyBtn = document.getElementById('copy');
-    const state   = document.getElementById('state');
+    (function(){
+      // Données serveur
+      const BASE  = "{{ base_url }}".replace(/\/$/, "");
+      const pack  = "{{ (pack or 'avocat') }}";
+      const pid   = "{{ (public_id or '').strip() }}";
+      const owner = "{{ (owner or 'Client') }}";
 
-    // Copie + feedback
-    copyBtn.addEventListener('click', async () => {
-      try {
-        await navigator.clipboard.writeText(codeEl.value);
-        copyBtn.textContent = 'Copié ✓';
-        state.textContent   = '• copié';
-        state.style.background = 'rgba(16,185,129,.28)';
-        setTimeout(()=>{ copyBtn.textContent='Copier'; }, 1400);
-      } catch (e) {
-        codeEl.select(); document.execCommand('copy');
-        copyBtn.textContent = 'Copié ✓';
-        setTimeout(()=>{ copyBtn.textContent='Copier'; }, 1400);
+      // Libellé de pack -> français
+      const packLabel = { avocat:"Avocat", immo:"Immobilier", medecin:"Médecin" }[pack] || pack;
+
+      // Nom complet
+      const fullName = `Betty Bot (${packLabel}) — ${owner}`;
+      document.getElementById('botFull').value = fullName;
+
+      // Tabs
+      const tabIframe = document.getElementById('t-iframe');
+      const tabScript = document.getElementById('t-script');
+      const codeEl    = document.getElementById('code');
+      const helper    = document.getElementById('helper');
+      const live      = document.getElementById('live');
+      const state     = document.getElementById('state');
+
+      function codeIframe() {
+        return [
+'<!-- Betty Bot AI — affichage direct (Wix/Webflow/Squarespace) -->',
+'<div style="position:relative; width:100%; max-width:420px; height:620px; margin:0 auto;">',
+`  <iframe src="${BASE}/chat?public_id=${pid}&embed=1"`,
+`          title="${fullName.replace(/"/g,'&quot;')}"`,
+'          style="width:100%; height:100%; border:0; border-radius:16px; box-shadow:0 10px 30px rgba(0,0,0,.25); background:#0b0f1e;"',
+'          loading="lazy" referrerpolicy="no-referrer-when-downgrade"',
+'          allow="clipboard-read; clipboard-write; microphone; autoplay"></iframe>',
+'</div>'
+        ].join("\n");
       }
-    });
 
-    // Prévisualisation (échappe </script>)
-    const base = {{ base|tojson }};
-    const id   = {{ id|tojson }};
-    const name = {{ bot_fullname|tojson }};
-    const END  = '<\\/script>';
+      function codeScript() {
+        return [
+'<!-- Betty Bot AI — script-loader (si votre CMS autorise les scripts) -->',
+`<script async id="betty-bot"`,
+`  src="${BASE}/static/widget.js"`,
+`  data-public-id="${pid}"`,
+`  data-bot-name="${fullName.replace(/"/g,'&quot;')}"></`+'script>'
+        ].join("\n");
+      }
 
-    let html  = '<!doctype html><html><head><meta charset="utf-8">';
-        html += '<meta name="viewport" content="width=device-width,initial-scale=1"></head>';
-        html += '<body style="margin:0;background:#0b0f1e;height:100vh">';
-    if (id) {
-      html += '<script async id="betty-bot" src="' + base + '/static/widget.js" ';
-      html += 'data-public-id="' + id + '" data-bot-name="' + name.replace(/"/g,'&quot;') + '">'+ END;
-    } else {
-      html += '<main style="display:grid;place-items:center;height:100%;color:#cbd5e1;font-family:Inter,system-ui">';
-      html += 'Identifiant public manquant — aucune prévisualisation</main>';
-    }
-    html += '</body></html>';
-    document.getElementById('live').srcdoc = html;
-  });
+      function selectTab(which) {
+        const isIframe = (which === 'iframe');
+        tabIframe.setAttribute('aria-selected', isIframe ? 'true' : 'false');
+        tabScript.setAttribute('aria-selected', isIframe ? 'false' : 'true');
+        codeEl.value = isIframe ? codeIframe() : codeScript();
+        helper.innerHTML = isIframe
+          ? 'Mode <strong>iframe</strong> : compatible Wix, Squarespace, Webflow. Le code pointe vers <code>{{ base_url }}</code> et s’affiche immédiatement.'
+          : 'Mode <strong>script</strong> : nécessite un site qui autorise l’exécution de scripts externes.';
+        // Prévisualisation
+        const html = isIframe
+          ? `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head><body style="margin:0;background:#0b0f1e;height:100vh"><iframe src="${BASE}/chat?public_id=${pid}&embed=1" title="${fullName.replace(/"/g,'&quot;')}" style="width:100%;height:100%;border:0"></iframe></body></html>`
+          : `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head><body style="margin:0;background:#0b0f1e;height:100vh"><script async id="betty-bot" src="${BASE}/static/widget.js" data-public-id="${pid}" data-bot-name="${fullName.replace(/"/g,'&quot;')}"></`+'script></body></html>';
+        live.srcdoc = html;
+        state.textContent = '• prêt à copier';
+      }
+
+      tabIframe.addEventListener('click', ()=>selectTab('iframe'));
+      tabScript.addEventListener('click', ()=>selectTab('script'));
+
+      // Copier
+      document.getElementById('copy').addEventListener('click', async ()=>{
+        try{
+          await navigator.clipboard.writeText(codeEl.value);
+          state.textContent = '• copié';
+          state.style.background = 'rgba(16,185,129,.28)';
+        }catch(e){
+          codeEl.select(); document.execCommand('copy');
+        }
+      });
+
+      // Init par défaut sur iframe (Wix-ready)
+      selectTab('iframe');
+    })();
   </script>
 </body>
 </html>
