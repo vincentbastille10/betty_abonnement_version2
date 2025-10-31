@@ -7,25 +7,40 @@ app = Flask(__name__)
 # =========================
 # CONFIG (env)
 # =========================
-TOGETHER_API_KEY = os.getenv("TOGETHER_API_KEY", "TA_CLE_TOGETHER_ICI")
+# Together
+TOGETHER_API_KEY = os.getenv("TOGETHER_API_KEY", "").strip()
 TOGETHER_API_URL = "https://api.together.xyz/v1/chat/completions"
-LLM_MODEL        = os.getenv("LLM_MODEL", "meta-llama/Meta-Llama-3-8B-Instruct")
-LLM_MAX_TOKENS   = int(os.getenv("LLM_MAX_TOKENS", "90"))
+# Modèle stable (tu peux surcharger via env LLM_MODEL)
+LLM_MODEL        = os.getenv(
+    "LLM_MODEL",
+    "meta-llama/Meta-Llama-3.1-8B-Instruct-Turbo"
+).strip()
+# Un peu plus de marge que 90 pour rendre les réponses utiles
+LLM_MAX_TOKENS   = int(os.getenv("LLM_MAX_TOKENS", "180"))
 
-stripe.api_key   = os.getenv("STRIPE_SECRET_KEY", "sk_test_xxx")
-PRICE_ID         = os.getenv("STRIPE_PRICE_ID", "price_xxx")  # abonnement 29,99 €/mois
+# Stripe
+stripe.api_key   = os.getenv("STRIPE_SECRET_KEY", "").strip()
+PRICE_ID         = os.getenv("STRIPE_PRICE_ID", "").strip()  # abonnement 29,99 €/mois
+
+# Base URL (utile pour success/cancel Stripe)
 BASE_URL         = (os.getenv("BASE_URL", "http://127.0.0.1:5000")).rstrip("/")
 
 # =========================
 # HELPERS
 # =========================
 def static_url(filename: str) -> str:
+    # URL absolue pour les clients externes si besoin
     return url_for("static", filename=filename, _external=True)
 
 def load_pack_prompt(pack_name: str) -> str:
     path = f"data/packs/{pack_name}.yaml"
     if not os.path.exists(path):
-        return "Tu es une assistante AI professionnelle. Réponds clairement et concrètement."
+        return (
+            "Tu es une assistante AI professionnelle. Réponds clairement et concrètement. "
+            "Ta mission principale est de QUALIFIER la demande (nom, email, téléphone, motif) "
+            "et de proposer un rendez-vous avec le professionnel si pertinent. "
+            "Reste concise, polie, en français. Ne donne pas d'avis juridique/médical : oriente."
+        )
     with open(path, "r") as f:
         data = yaml.safe_load(f) or {}
     return data.get("prompt", "Tu es une assistante AI professionnelle.")
@@ -49,33 +64,58 @@ def build_system_prompt(pack_name: str, profile: dict, greeting: str = "") -> st
     return f"{base}{biz}{greet}"
 
 def query_llm(user_input: str, pack_name: str, profile: dict = None, greeting: str = "") -> str:
-    headers = {"Authorization": f"Bearer {TOGETHER_API_KEY}", "Content-Type": "application/json"}
+    """
+    Appel robuste à Together /chat/completions
+    """
+    # Clé manquante -> message propre (évite la bulle "erreur")
+    if not TOGETHER_API_KEY:
+        return "⚠️ Clé Together absente côté serveur. Ajoutez TOGETHER_API_KEY dans vos variables d’environnement."
+
+    headers = {
+        "Authorization": f"Bearer {TOGETHER_API_KEY}",
+        "Content-Type": "application/json",
+    }
     system_prompt = build_system_prompt(pack_name, profile or {}, greeting)
     payload = {
         "model": LLM_MODEL,
         "max_tokens": LLM_MAX_TOKENS,
+        "temperature": 0.4,
         "messages": [
             {"role": "system", "content": system_prompt},
             {"role": "user",   "content": user_input}
         ]
     }
     try:
-        r = requests.post(TOGETHER_API_URL, headers=headers, json=payload, timeout=20)
-        r.raise_for_status()
-        return r.json()["choices"][0]["message"]["content"].strip()
+        r = requests.post(TOGETHER_API_URL, headers=headers, json=payload, timeout=30)
+        # Si Together renvoie une erreur, remonter l’info lisible
+        if not r.ok:
+            try:
+                err = r.json()
+            except Exception:
+                err = {"status": r.status_code, "text": r.text[:200]}
+            return f"⚠️ Erreur Together: {err}"
+        data = r.json()
+        content = (
+            data.get("choices", [{}])[0]
+                .get("message", {})
+                .get("content", "")
+                .strip()
+        )
+        return content or "Désolé, je n’ai pas pu générer de réponse."
     except Exception as e:
-        print("[LLM ERROR]", e)
-        return "Désolé, une erreur est survenue lors de la génération de la réponse."
+        print("[LLM ERROR]", type(e).__name__, e)
+        return f"⚠️ Exception serveur: {type(e).__name__}: {e}"
 
 def parse_contact_info(text: str) -> dict:
     """Heuristiques simples pour extraire téléphone/email/adresse/horaires/nom depuis un champ libre."""
-    if not text: return {}
+    if not text:
+        return {}
     d = {}
-    m = re.search(r'(\+?\d[\d\s\.\-]{6,})', text);                 d["phone"]   = m.group(1) if m else None
-    m = re.search(r'[\w\.-]+@[\w\.-]+\.\w+', text);                d["email"]   = m.group(0) if m else None
-    m = re.search(r'horaires?\s*:\s*(.+)', text, re.I);            d["hours"]   = m.group(1).strip() if m else None
+    m = re.search(r'(\+?\d[\d\s\.\-]{6,})', text);                  d["phone"]   = m.group(1) if m else None
+    m = re.search(r'[\w\.-]+@[\w\.-]+\.\w+', text);                 d["email"]   = m.group(0) if m else None
+    m = re.search(r'horaires?\s*:\s*(.+)', text, re.I);             d["hours"]   = m.group(1).strip() if m else None
     m = re.search(r'(rue|avenue|bd|boulevard|place).+', text, re.I); d["address"] = m.group(0).strip() if m else None
-    m = re.search(r'(nom|cabinet|agence)\s*:\s*(.+)', text, re.I); d["name"]    = m.group(2).strip() if m else None
+    m = re.search(r'(nom|cabinet|agence)\s*:\s*(.+)', text, re.I);  d["name"]    = m.group(2).strip() if m else None
     return {k: v for k, v in d.items() if v}
 
 # =========================
@@ -122,13 +162,17 @@ def inscription_page():
         px      = request.args.get("px", "0")
         py      = request.args.get("py", "0")
 
-        # on associe temporairement le profil au bot-type choisi (démo)
+        # Associe temporairement le profil au bot-type choisi (démo)
         profile = parse_contact_info(contact)
         bot_id = "avocat-001" if pack == "avocat" else ("medecin-003" if pack == "medecin" else "immo-002")
         BOTS[bot_id]["profile"]  = profile
         BOTS[bot_id]["greeting"] = greet
         BOTS[bot_id]["color"]    = color
         BOTS[bot_id]["avatar_file"] = avatar
+
+        # Stripe : si clés/price manquent en dev, on simule un succès propre
+        if not stripe.api_key or not PRICE_ID:
+            return redirect(f"{BASE_URL}/recap?pack={pack}&session_id=fake_checkout_dev", code=303)
 
         session = stripe.checkout.Session.create(
             mode="subscription",
@@ -160,8 +204,12 @@ def chat_page():
 @app.route("/api/bettybot", methods=["POST"])
 def bettybot_reply():
     payload    = request.get_json(force=True, silent=True) or {}
-    user_input = payload.get("message", "").strip()
+    user_input = (payload.get("message") or "").strip()
     bot_id     = payload.get("bot_id", "avocat-001")
+
+    if not user_input:
+        # message neutre si on envoie à vide
+        return jsonify({"response": "Dites-moi ce dont vous avez besoin 🙂"}), 200
 
     bot = BOTS.get(bot_id, BOTS["avocat-001"])
     answer = query_llm(
@@ -186,8 +234,14 @@ def bot_meta():
         "greeting": bot.get("greeting", "")
     })
 
+# Petit endpoint santé (utile pour Vercel)
+@app.route("/healthz")
+def healthz():
+    return "ok", 200
+
 # =========================
 # RUN (local)
 # =========================
 if __name__ == "__main__":
+    # En local uniquement
     app.run(host="0.0.0.0", port=5000, debug=True)
