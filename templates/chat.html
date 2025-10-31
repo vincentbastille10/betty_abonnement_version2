@@ -3,24 +3,30 @@
 <h1>✨ Betty Bots</h1>
 
 <div class="demo-frame">
-  <div class="chat-frame" id="chat">
-    <div style="padding:16px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px">
-      <img id="bot-avatar" src="" alt="Avatar" style="width:36px;height:36px;border-radius:999px;border:1px solid var(--border);background:#0b0f14;object-fit:cover">
-      <div>
-        <div id="bot-name" style="font-weight:700">Betty</div>
-        <div id="bot-pack" style="font-size:12px;color:var(--muted)"></div>
-      </div>
+  <div class="chat-frame" id="chat" style="display:flex;flex-direction:column;">
+
+    <!-- Header compact, avatar centré et plus grand -->
+    <div style="padding:18px 16px 10px;border-bottom:1px solid var(--border);text-align:center">
+      <img id="bot-avatar" src="" alt="Avatar"
+           style="width:64px;height:64px;border-radius:999px;border:1px solid var(--border);background:#0b0f14;object-fit:cover;display:block;margin:0 auto 8px">
+      <div id="bot-name" style="font-weight:700">Betty</div>
+      <!-- Pack/ID masqués visuellement -->
+      <div id="bot-pack" style="display:none"></div>
     </div>
 
-    <div id="messages" style="padding:16px;overflow:auto;height:390px">
-      <div id="greet" class="bubble" style="max-width:280px;background:#111827;border:1px solid var(--border);border-radius:12px;padding:12px;margin-bottom:10px">
+    <!-- Zone messages sans barre de scroll visible au chargement -->
+    <div id="messages" style="padding:16px;overflow:auto;flex:1;scroll-behavior:smooth">
+      <div id="greet" class="bubble"
+           style="max-width:280px;background:#111827;border:1px solid var(--border);border-radius:12px;padding:12px;margin:8px 0">
         Bonjour, je suis Betty. Comment puis-je vous aider ?
       </div>
     </div>
 
-    <form id="form" style="padding:16px;border-top:1px solid var(--border)">
-      <input id="input" type="text" placeholder="Écrivez et appuyez sur Entrée…" autocomplete="off">
-      <button class="btn" style="margin-left:8px" type="submit">Envoyer</button>
+    <!-- Input + Enter => submit, autofocus -->
+    <form id="form" style="padding:14px;border-top:1px solid var(--border);display:flex;gap:8px">
+      <input id="input" type="text" placeholder="Écrivez et appuyez sur Entrée…" autocomplete="off" autofocus
+             style="background:#0b0f14;border:1px solid var(--border);border-radius:10px;color:var(--text);padding:12px;flex:1">
+      <button class="btn" type="submit">Envoyer</button>
     </form>
   </div>
 </div>
@@ -29,7 +35,7 @@
   const qs = new URLSearchParams(location.search);
   const botId = qs.get('bot_id') || 'avocat-001';
 
-  // UI refs
+  // Refs
   const avatarEl = document.getElementById('bot-avatar');
   const nameEl   = document.getElementById('bot-name');
   const packEl   = document.getElementById('bot-pack');
@@ -38,18 +44,34 @@
   const form     = document.getElementById('form');
   const input    = document.getElementById('input');
 
-  // Charge meta (nom, avatar, couleur, greeting, etc.)
+  // Auto-focus agressif : si l’utilisateur tape, on focus l’input et on insère la touche
+  document.addEventListener('keydown', (e) => {
+    // Ne pas intercepter Entrée/Escape/Tab ni si un champ a déjà le focus
+    const ign = ['Enter','Escape','Tab'];
+    if (ign.includes(e.key)) return;
+    if (document.activeElement !== input) {
+      input.focus();
+      // injecter le caractère si c'est une touche imprimable
+      if (e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey) {
+        e.preventDefault();
+        input.value += e.key;
+      }
+    }
+  });
+
+  function scrollToBottom(){ msgs.scrollTop = msgs.scrollHeight; }
+
+  // Récup méta bot
   fetch(`/api/bot_meta?bot_id=${encodeURIComponent(botId)}`)
     .then(r => r.json())
     .then(meta => {
       nameEl.textContent = meta.name || 'Betty';
-      packEl.textContent = `ID: ${botId}`;
+      packEl.textContent = `ID: ${botId}`; // masqué par CSS
       avatarEl.src = meta.avatar_url || '';
       if (meta.greeting) greetEl.textContent = meta.greeting;
-      // Couleur d’accent
       document.documentElement.style.setProperty('--primary', meta.color_hex || '#4F46E5');
-    })
-    .catch(() => { /* silencieux */ });
+      scrollToBottom();
+    }).catch(()=>{});
 
   function addBubble(text, mine=false){
     const div = document.createElement('div');
@@ -61,24 +83,19 @@
     div.style.margin = '8px 0';
     div.style.whiteSpace = 'pre-wrap';
     div.textContent = text;
-    if(mine){
-      div.style.background = '#1b2230';
-      div.style.marginLeft = 'auto';
-    } else {
-      div.style.background = '#111827';
-      div.style.marginRight = 'auto';
-    }
+    if(mine){ div.style.background='#1b2230'; div.style.marginLeft='auto'; }
+    else    { div.style.background='#111827'; div.style.marginRight='auto'; }
     msgs.appendChild(div);
-    msgs.scrollTop = msgs.scrollHeight;
+    scrollToBottom();
   }
 
+  // Entrée => submit (comportement natif d’un <form> avec un bouton type=submit)
   form.addEventListener('submit', async (e)=>{
     e.preventDefault();
     const text = input.value.trim();
     if(!text) return;
     addBubble(text, true);
     input.value = '';
-
     try {
       const r = await fetch('/api/bettybot', {
         method:'POST',
@@ -91,11 +108,8 @@
       addBubble("Désolé, une erreur est survenue.");
     }
   });
-</script>
 
-<style>
-  .chat-frame input{
-    background:#0b0f14;border:1px solid var(--border);border-radius:10px;color:var(--text);padding:10px;width:calc(100% - 96px)
-  }
-</style>
+  // Force le focus à l’ouverture (au cas où l’autofocus serait ignoré par le navigateur)
+  window.addEventListener('load', ()=>{ input.focus(); scrollToBottom(); });
+</script>
 {% endblock %}
