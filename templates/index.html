@@ -1,26 +1,15 @@
 {% extends "base.html" %}
 {% block content %}
-  <section class="hero">
-    <h1>Découvrez Betty</h1>
-    <p>Chatbot métier clé en main (avocat / médecin / immo). Qualifiez vos leads 24/7.</p>
-  </section>
+<h1>Découvrez Betty Bot</h1>
+<p class="intro">
+  Une assistante AI plug & play, déjà formée pour votre métier.<br>
+  Testez-la dès maintenant !
+</p>
 
-  <section class="grid">
-    <div class="card">
-      <h2>Démo du bot</h2>
-      <!-- Fenêtre carrée visible directement -->
-      <iframe
-        title="Betty Demo"
-        class="chat-frame"
-        src="/chat?bot_id=avocat-001">
-      </iframe>
-      <p class="hint">Cette démo utilise le pack <strong>Avocat</strong>.</p>
-    </div>
+<div class="demo-frame">
+  <iframe src="{{ url_for('chat_page') }}?bot_id=avocat-001" title="Démo du bot"
+          style="width:360px; height:520px; border:0; border-radius:18px; box-shadow:0 0 25px rgba(0,0,0,.4);"></iframe>
+</div>
 
-    <div class="card">
-      <h2>Créez votre bot</h2>
-      <p>Choisissez le métier, la couleur, l’avatar et la personnalité. Installez-le sur votre site en 1 minute.</p>
-      <a class="btn primary" href="{{ url_for('config_page') }}">Configurer votre chatbot métier</a>
-    </div>
-  </section>
+<a href="{{ url_for('config_page') }}" class="btn primary big">Configurer votre bot métier</a>
 {% endblock %}
