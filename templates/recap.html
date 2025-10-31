@@ -37,20 +37,22 @@
     .previewWrap{background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.06);border-radius:16px;padding:14px}
     iframe{width:100%;height:540px;border:0;border-radius:12px;background:#0b0f1e}
     .small{font-size:12px;color:#aab1c2}
-    .warn{color:#ffb4b4}
   </style>
 </head>
 <body>
   {% set base = (base_url or BASE_URL)|default('', true) %}
   {% set base = base.rstrip('/') %}
+  {% set pack = (pack or 'immo') %}
+  {% set PACK_LABELS = {'avocat':'Avocat','immo':'Immobilier','medecin':'Médecin'} %}
+  {% set pack_label = PACK_LABELS.get(pack, pack|capitalize) %}
   {% set id   = (public_id or '') %}
-  {% set fullbot = 'Betty Bot — ' ~ id %}
+  {% set bot_fullname = 'Betty Bot (' ~ pack_label ~ ')' %}
   {% set embed_code -%}
-<!-- Betty Bots — propulsé par Spectra Media AI -->
-<script async id="betty-widget"
+<!-- Betty Bot AI — propulsé par Spectra Media AI -->
+<script async id="betty-bot"
   src="{{ base }}/static/widget.js"
   data-public-id="{{ id }}"
-  data-bot-name="{{ fullbot }}">
+  data-bot-name="{{ bot_fullname }}">
 </script>
   {%- endset %}
 
@@ -75,12 +77,12 @@
       <!-- GAUCHE -->
       <section class="card">
         <div class="title">
-          <h2>Code d'intégration</h2>
+          <h2>Code d’intégration</h2>
           <span class="badge" id="state">• prêt à copier</span>
         </div>
 
         <label>Nom complet du bot</label>
-        <input id="botName" value="{{ fullbot }}" readonly>
+        <input id="botName" value="{{ bot_fullname }}" readonly>
 
         <label for="code">Collez ce code juste avant <code>&lt;/body&gt;</code> de votre site</label>
         <div class="codebox">
@@ -88,8 +90,9 @@
           <div class="copyBar"><button class="btn primary" id="copy">Copier</button></div>
         </div>
 
-        <p class="small" id="helper">
-          Votre script charge le widget depuis <code>{{ base }}</code> et référence votre identifiant public <code>{{ id }}</code>. Aucune autre configuration n’est nécessaire.
+        <p class="small">
+          Ce code installe **Betty Bot AI** (pack <strong>{{ pack_label }}</strong>) pour votre site, reliée à votre identifiant public
+          <code>{{ id }}</code>. Aucun réglage supplémentaire n’est requis.
         </p>
       </section>
 
@@ -107,29 +110,36 @@
     const copyBtn = document.getElementById('copy');
     const state   = document.getElementById('state');
 
-    // Copie
+    // Copie + feedback
     copyBtn.addEventListener('click', async () => {
-      try { await navigator.clipboard.writeText(codeEl.value);
-            state.textContent = '• copié';
-            state.style.background = 'rgba(16,185,129,.28)';
-      } catch (e) { codeEl.select(); document.execCommand('copy'); }
+      try {
+        await navigator.clipboard.writeText(codeEl.value);
+        copyBtn.textContent = 'Copié ✓';
+        state.textContent   = '• copié';
+        state.style.background = 'rgba(16,185,129,.28)';
+        setTimeout(()=>{ copyBtn.textContent='Copier'; }, 1400);
+      } catch (e) {
+        codeEl.select(); document.execCommand('copy');
+        copyBtn.textContent = 'Copié ✓';
+        setTimeout(()=>{ copyBtn.textContent='Copier'; }, 1400);
+      }
     });
 
-    // Prévisualisation (ATTN: on échappe </script>)
+    // Prévisualisation (échappe </script>)
     const base = {{ base|tojson }};
     const id   = {{ id|tojson }};
-    const name = {{ fullbot|tojson }};
+    const name = {{ bot_fullname|tojson }};
     const END  = '<\\/script>';
 
     let html  = '<!doctype html><html><head><meta charset="utf-8">';
         html += '<meta name="viewport" content="width=device-width,initial-scale=1"></head>';
         html += '<body style="margin:0;background:#0b0f1e;height:100vh">';
     if (id) {
-      html += '<script async id="betty-widget" src="' + base + '/static/widget.js" ';
-      html += 'data-public-id="' + id + '" data-bot-name="' + name.replace(/"/g,'&quot;') + '">' + END;
+      html += '<script async id="betty-bot" src="' + base + '/static/widget.js" ';
+      html += 'data-public-id="' + id + '" data-bot-name="' + name.replace(/"/g,'&quot;') + '">'+ END;
     } else {
       html += '<main style="display:grid;place-items:center;height:100%;color:#cbd5e1;font-family:Inter,system-ui">';
-      html += 'ID manquant — aucune prévisualisation</main>';
+      html += 'Identifiant public manquant — aucune prévisualisation</main>';
     }
     html += '</body></html>';
     document.getElementById('live').srcdoc = html;
