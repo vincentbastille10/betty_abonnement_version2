@@ -1,6 +1,13 @@
 # app.py
-from flask import Flask, render_template, request, jsonify, redirect, url_for, session, abort
+from flask import Flask, render_template, request, jsonify, redirect, url_for, session
 import os, yaml, requests, re, stripe, json
+
+# --- Mailjet (HTTP API) ---
+import requests as rq
+MJ_API_KEY    = os.getenv("MJ_API_KEY", "").strip()
+MJ_API_SECRET = os.getenv("MJ_API_SECRET", "").strip()
+MJ_FROM_EMAIL = os.getenv("MJ_FROM_EMAIL", "no-reply@spectramedia.ai").strip()
+MJ_FROM_NAME  = os.getenv("MJ_FROM_NAME",  "Spectra Media AI").strip()
 
 app = Flask(__name__)
 app.secret_key = os.getenv("FLASK_SECRET_KEY", "dev-secret-change-me")
@@ -17,25 +24,19 @@ LLM_MAX_TOKENS = int(os.getenv("LLM_MAX_TOKENS", "180"))
 # Stripe
 stripe.api_key = os.getenv("STRIPE_SECRET_KEY", "").strip()
 PRICE_ID = os.getenv("STRIPE_PRICE_ID", "").strip()  # abonnement 29,99 €/mois
-STRIPE_WEBHOOK_SECRET = os.getenv("STRIPE_WEBHOOK_SECRET", "").strip()
 
 # Base URL (utile pour success/cancel Stripe)
 BASE_URL = (os.getenv("BASE_URL", "http://127.0.0.1:5000")).rstrip("/")
-
-# Mailjet (pour l’envoi des leads)
-import requests as rq
-MJ_API_KEY    = os.getenv("MJ_API_KEY", "")
-MJ_API_SECRET = os.getenv("MJ_API_SECRET", "")
-MJ_FROM_EMAIL = os.getenv("MJ_FROM_EMAIL", "no-reply@spectramedia.ai")
-MJ_FROM_NAME  = os.getenv("MJ_FROM_NAME",  "Spectra Media AI")
 
 # =========================
 # HELPERS
 # =========================
 def static_url(filename: str) -> str:
+    """Construit une URL absolue vers /static/* (utile sur Vercel)."""
     return url_for("static", filename=filename, _external=True)
 
 def load_pack_prompt(pack_name: str) -> str:
+    """Charge le prompt du pack (avocat, immo, medecin). Fallback générique."""
     path = f"data/packs/{pack_name}.yaml"
     if not os.path.exists(path):
         return (
@@ -49,6 +50,7 @@ def load_pack_prompt(pack_name: str) -> str:
     return data.get("prompt", "Tu es une assistante AI professionnelle.")
 
 def build_business_block(profile: dict) -> str:
+    """Injecte les infos de l’établissement dans le système (si fournies)."""
     if not profile:
         return ""
     lines = ["\n---\nINFORMATIONS ETABLISSEMENT (utilise-les dans tes réponses) :"]
@@ -62,7 +64,7 @@ def build_business_block(profile: dict) -> str:
 
 def build_system_prompt(pack_name: str, profile: dict, greeting: str = "") -> str:
     """
-    Prompt entonnoir + LEAD_JSON.
+    Prompt entonnoir + LEAD_JSON + règles RDV.
     """
     base = load_pack_prompt(pack_name)
     biz  = build_business_block(profile)
@@ -75,9 +77,12 @@ RÈGLES DE CONVERSATION (OBLIGATOIRES) :
 - **Pas de répétitions** : n'explique pas à nouveau ce qui vient d'être dit.
 - Oriente la qualification dès les 1ers échanges.
 - Champs à collecter (ordre conseillé) : **motif**, **nom**, **email**, **téléphone**, **disponibilités**.
+- Si l’utilisateur demande un **rendez-vous** (ex. « rendez vous », « rdv », « prendre rendez-vous ») :
+  -> **Commence immédiatement par demander les coordonnées** : « votre nom + un contact (email ou téléphone) + vos disponibilités ». 
+  -> Tu peux demander le **motif** juste après si nécessaire, mais **priorité aux coordonnées**.
 - Dès que tu as au moins **motif + nom + (email ou téléphone)**, propose un RDV (créneau ou demande la dispo).
 - Tu ne donnes pas d'avis juridique/médical ; tu orientes vers le pro.
-- Termine souvent par une question **courte** qui fait avancer.
+- Termine toujours par une question **courte** qui fait avancer.
 
 ### SORTIE LEAD JSON
 À CHAQUE message, ajoute en **dernière ligne** (sans texte avant/après, sans markdown) un tag :
@@ -86,55 +91,23 @@ RÈGLES DE CONVERSATION (OBLIGATOIRES) :
 - `stage = "ready"` **uniquement** si tu as **motif + nom + (email ou téléphone)**.
 - Sinon `stage = "collecting"`.
 - Le JSON doit être **une seule ligne** valide. Pas de retour à la ligne, pas de ``` ni autre balise.
-
-Réponds **normalement** au-dessus, puis juste la ligne <LEAD_JSON> à la fin.
 """
     greet = f"\nMessage d'accueil recommandé : {greeting}\n" if greeting else ""
     return f"{base}\n{biz}\n{guide}\n{greet}"
 
 def query_llm(user_input: str, pack_name: str, profile: dict = None, greeting: str = "") -> str:
+    """Appel simple (sans historique) à Together /chat/completions."""
     if not TOGETHER_API_KEY:
         return "⚠️ Clé Together absente côté serveur. Ajoutez TOGETHER_API_KEY dans vos variables d’environnement."
     headers = {"Authorization": f"Bearer {TOGETHER_API_KEY}", "Content-Type": "application/json"}
-    system_prompt = build_system_prompt(pack_name, profile or {}, greeting)
     payload = {
         "model": LLM_MODEL,
         "max_tokens": LLM_MAX_TOKENS,
         "temperature": 0.4,
         "messages": [
-            {"role": "system", "content": system_prompt},
+            {"role": "system", "content": build_system_prompt(pack_name, profile or {}, greeting)},
             {"role": "user",   "content": user_input}
         ]
-    }
-    try:
-        r = requests.post(TOGETHER_API_URL, headers=headers, json=payload, timeout=30)
-        if not r.ok:
-            try:
-                err = r.json()
-            except Exception:
-                err = {"status": r.status_code, "text": r.text[:200]}
-            return f"⚠️ Erreur Together: {err}"
-        data = r.json()
-        content = data.get("choices", [{}])[0].get("message", {}).get("content", "").strip()
-        return content or "Désolé, je n’ai pas pu générer de réponse."
-    except Exception as e:
-        print("[LLM ERROR]", type(e).__name__, e)
-        return f"⚠️ Exception serveur: {type(e).__name__}: {e}"
-
-def call_llm_with_history(system_prompt: str, history: list, user_input: str) -> str:
-    if not TOGETHER_API_KEY:
-        return "⚠️ Clé Together absente côté serveur. Ajoutez TOGETHER_API_KEY."
-    headers = {"Authorization": f"Bearer {TOGETHER_API_KEY}", "Content-Type": "application/json"}
-
-    messages = [{"role": "system", "content": system_prompt}]
-    messages.extend(history or [])
-    messages.append({"role": "user", "content": user_input})
-
-    payload = {
-        "model": LLM_MODEL,
-        "max_tokens": LLM_MAX_TOKENS,
-        "temperature": 0.4,
-        "messages": messages
     }
     try:
         r = requests.post(TOGETHER_API_URL, headers=headers, json=payload, timeout=30)
@@ -143,31 +116,52 @@ def call_llm_with_history(system_prompt: str, history: list, user_input: str) ->
             except Exception: err = {"status": r.status_code, "text": r.text[:200]}
             return f"⚠️ Erreur Together: {err}"
         data = r.json()
-        content = data.get("choices", [{}])[0].get("message", {}).get("content", "").strip()
-        return content or "Désolé, je n’ai pas pu générer de réponse."
+        return (data.get("choices", [{}])[0].get("message", {}).get("content", "")).strip() or \
+               "Désolé, je n’ai pas pu générer de réponse."
+    except Exception as e:
+        print("[LLM ERROR]", type(e).__name__, e)
+        return f"⚠️ Exception serveur: {type(e).__name__}: {e}"
+
+def call_llm_with_history(system_prompt: str, history: list, user_input: str) -> str:
+    """Variante avec historique court (limite les redites)."""
+    if not TOGETHER_API_KEY:
+        return "⚠️ Clé Together absente côté serveur. Ajoutez TOGETHER_API_KEY."
+    headers = {"Authorization": f"Bearer {TOGETHER_API_KEY}", "Content-Type": "application/json"}
+    messages = [{"role": "system", "content": system_prompt}]
+    messages.extend(history or [])
+    messages.append({"role": "user", "content": user_input})
+    payload = {"model": LLM_MODEL, "max_tokens": LLM_MAX_TOKENS, "temperature": 0.4, "messages": messages}
+    try:
+        r = requests.post(TOGETHER_API_URL, headers=headers, json=payload, timeout=30)
+        if not r.ok:
+            try: err = r.json()
+            except Exception: err = {"status": r.status_code, "text": r.text[:200]}
+            return f"⚠️ Erreur Together: {err}"
+        data = r.json()
+        return (data.get("choices", [{}])[0].get("message", {}).get("content", "")).strip() or \
+               "Désolé, je n’ai pas pu générer de réponse."
     except Exception as e:
         print("[LLM ERROR]", type(e).__name__, e)
         return f"⚠️ Exception serveur: {type(e).__name__}: {e}"
 
 def parse_contact_info(text: str) -> dict:
-    if not text:
-        return {}
+    """Heuristiques pour extraire téléphone/email/adresse/horaires/nom depuis un champ libre."""
+    if not text: return {}
     d = {}
-    m = re.search(r'(\+?\d[\d\s\.\-]{6,})', text);                    d["phone"]   = m.group(1) if m else None
-    m = re.search(r'[\w\.-]+@[\w\.-]+\.\w+', text);                   d["email"]   = m.group(0) if m else None
-    m = re.search(r'horaires?\s*:\s*(.+)', text, re.I);               d["hours"]   = m.group(1).strip() if m else None
-    m = re.search(r'(rue|avenue|bd|boulevard|place).+', text, re.I);  d["address"] = m.group(0).strip() if m else None
-    m = re.search(r'(nom|cabinet|agence)\s*:\s*(.+)', text, re.I);    d["name"]    = m.group(2).strip() if m else None
+    m = re.search(r'(\+?\d[\d\s\.\-]{6,})', text);                   d["phone"]   = m.group(1) if m else None
+    m = re.search(r'[\w\.-]+@[\w\.-]+\.\w+', text);                  d["email"]   = m.group(0) if m else None
+    m = re.search(r'horaires?\s*:\s*(.+)', text, re.I);              d["hours"]   = m.group(1).strip() if m else None
+    m = re.search(r'(rue|avenue|bd|boulevard|place).+', text, re.I); d["address"] = m.group(0).strip() if m else None
+    m = re.search(r'(nom|cabinet|agence)\s*:\s*(.+)', text, re.I);   d["name"]    = m.group(2).strip() if m else None
     return {k: v for k, v in d.items() if v}
 
 LEAD_TAG_RE = re.compile(r"<LEAD_JSON>(\{.*?\})</LEAD_JSON>$")
 
 def extract_lead_json(text: str):
-    if not text:
-        return text, None
+    """Extrait et retire la ligne LEAD_JSON. Retourne (message_sans_tag, lead_dict_ou_None)."""
+    if not text: return text, None
     m = LEAD_TAG_RE.search(text)
-    if not m:
-        return text, None
+    if not m: return text, None
     lead_raw = m.group(1)
     message = text[:m.start()].rstrip()
     try:
@@ -178,8 +172,7 @@ def extract_lead_json(text: str):
 
 def send_lead_email(to_email: str, lead: dict, bot_name: str = "Betty Bot"):
     """
-    Envoi du lead via l’API Mailjet.
-    Configure ces 4 variables d’environnement :
+    Envoi d'email via Mailjet. Configure:
       MJ_API_KEY, MJ_API_SECRET, MJ_FROM_EMAIL, MJ_FROM_NAME
     """
     if not (MJ_API_KEY and MJ_API_SECRET and to_email):
@@ -187,12 +180,12 @@ def send_lead_email(to_email: str, lead: dict, bot_name: str = "Betty Bot"):
         return
     subject = f"Nouveau lead qualifié via {bot_name}"
     text = (
-        f"Motif         : {lead.get('reason','')}\n"
-        f"Nom           : {lead.get('name','')}\n"
-        f"Email         : {lead.get('email','')}\n"
-        f"Téléphone     : {lead.get('phone','')}\n"
-        f"Disponibilités: {lead.get('availability','')}\n"
-        f"Statut        : {lead.get('stage','')}\n"
+        f"Motif        : {lead.get('reason','')}\n"
+        f"Nom          : {lead.get('name','')}\n"
+        f"Email        : {lead.get('email','')}\n"
+        f"Téléphone    : {lead.get('phone','')}\n"
+        f"Disponibilités : {lead.get('availability','')}\n"
+        f"Statut       : {lead.get('stage','')}\n"
     )
     payload = {
       "Messages":[{
@@ -202,10 +195,20 @@ def send_lead_email(to_email: str, lead: dict, bot_name: str = "Betty Bot"):
         "TextPart": text
       }]
     }
-    r = rq.post("https://api.mailjet.com/v3.1/send",
-                auth=(MJ_API_KEY, MJ_API_SECRET),
-                json=payload, timeout=15)
-    print("[LEAD][MAILJET]", "OK" if r.ok else f"KO {r.status_code} {r.text[:120]}")
+    try:
+        r = rq.post(
+            "https://api.mailjet.com/v3.1/send",
+            auth=(MJ_API_KEY, MJ_API_SECRET),
+            json=payload, timeout=15
+        )
+        print("[LEAD][MAILJET]", "OK" if r.ok else f"KO {r.status_code} {r.text[:160]}")
+    except Exception as e:
+        print("[LEAD][MAILJET] Exception:", type(e).__name__, e)
+
+# --- Détecteur d'intention « rendez-vous » ---
+RDV_RE = re.compile(r"\b(rdv|rendez[\s\-]?vous|prise?\s+de\s+rendez[\s\-]?vous|appointment)\b", re.I)
+def wants_appointment(text: str) -> bool:
+    return bool(text and RDV_RE.search(text))
 
 # =========================
 # MINI-DB (démo)
@@ -258,7 +261,7 @@ def inscription_page():
         BOTS[bot_id]["greeting"]    = greet
         BOTS[bot_id]["color"]       = color
         BOTS[bot_id]["avatar_file"] = avatar
-        BOTS[bot_id]["buyer_email"] = email  # provisoire; en prod -> webhook
+        BOTS[bot_id]["buyer_email"] = email
 
         # Stripe : si clés/price manquent en dev, on simule un succès propre
         if not stripe.api_key or not PRICE_ID:
@@ -271,7 +274,6 @@ def inscription_page():
             success_url=f"{BASE_URL}/recap?pack={pack}&session_id={{CHECKOUT_SESSION_ID}}",
             cancel_url=f"{BASE_URL}/inscription?pack={pack}&color={color}&avatar={avatar}",
             metadata={
-                "bot_id": bot_id,  # <— IMPORTANT pour lier l’acheteur au bot
                 "pack": pack, "color": color, "avatar": avatar,
                 "greeting": greet, "contact_info": contact,
                 "persona_x": px, "persona_y": py
@@ -303,15 +305,27 @@ def bettybot_reply():
 
     bot = BOTS.get(bot_id, BOTS["avocat-001"])
 
-    # mémoire courte pour limiter les redites
+    # --- mémoire courte pour limiter les redites ---
     key = f"conv_{bot_id}"
     history = session.get(key, [])
     history = history[-6:]  # 3 tours précédents max
 
+    # prompt avec entonnoir + LEAD_JSON
     system_prompt = build_system_prompt(bot["pack"], bot.get("profile", {}), bot.get("greeting", ""))
+
+    # si intention RDV détectée -> consigne renforcée pour coordonnées
+    if wants_appointment(user_input):
+        system_prompt += (
+            "\n\n[INSTRUCTION SUPPLÉMENTAIRE RDV] "
+            "L'utilisateur vient de demander un rendez-vous. "
+            "Commence tout de suite par demander **nom + (email ou téléphone) + disponibilités**. "
+            "Reste très bref et avance étape par étape."
+        )
+
+    # appel LLM
     full_text = call_llm_with_history(system_prompt=system_prompt, history=history, user_input=user_input)
 
-    # coupe la ligne LEAD_JSON et récupère le lead
+    # on coupe la ligne LEAD_JSON et on récupère le lead
     response_text, lead = extract_lead_json(full_text)
 
     # MAJ mémoire
@@ -319,9 +333,9 @@ def bettybot_reply():
     history.append({"role": "assistant", "content": response_text})
     session[key] = history
 
-    # si lead prêt et email acheteur connu -> envoi mail
+    # si lead prêt et email acheteur connu -> envoi Mailjet
     if lead and isinstance(lead, dict) and lead.get("stage") == "ready":
-        buyer_email = bot.get("buyer_email")
+        buyer_email = bot.get("buyer_email")  # en prod, fiabiliser via webhook Stripe
         if buyer_email:
             send_lead_email(buyer_email, lead, bot_name=bot["name"])
 
@@ -341,49 +355,17 @@ def bot_meta():
         "greeting": bot.get("greeting", "")
     })
 
+# Endpoint santé (utile pour Vercel)
+@app.route("/healthz")
+def healthz():
+    return "ok", 200
+
 # Reset conversation (démo)
 @app.route("/api/reset", methods=["POST"])
 def reset_conv():
     bot_id = (request.get_json(silent=True) or {}).get("bot_id", "avocat-001")
     session.pop(f"conv_{bot_id}", None)
     return jsonify({"ok": True})
-
-# Endpoint santé (utile pour Vercel)
-@app.route("/healthz")
-def healthz():
-    return "ok", 200
-
-# =========================
-# WEBHOOK STRIPE (prod)
-# =========================
-@app.route("/webhooks/stripe", methods=["POST"])
-def stripe_webhook():
-    payload = request.data
-    sig = request.headers.get("Stripe-Signature", "")
-    try:
-        event = stripe.Webhook.construct_event(
-            payload=payload,
-            sig_header=sig,
-            secret=STRIPE_WEBHOOK_SECRET
-        )
-    except Exception as e:
-        print("[STRIPE WEBHOOK] invalid signature:", e)
-        return abort(400)
-
-    if event["type"] == "checkout.session.completed":
-        session_obj = event["data"]["object"]
-        buyer_email = (session_obj.get("customer_details") or {}).get("email") \
-                      or session_obj.get("customer_email")
-        meta = session_obj.get("metadata") or {}
-        bot_id = meta.get("bot_id")
-        if bot_id and buyer_email:
-            if bot_id in BOTS:
-                BOTS[bot_id]["buyer_email"] = buyer_email
-                print(f"[WEBHOOK] bot {bot_id} lié à {buyer_email}")
-            else:
-                print(f"[WEBHOOK] bot inconnu: {bot_id}")
-
-    return "ok", 200
 
 # =========================
 # RUN (local)
