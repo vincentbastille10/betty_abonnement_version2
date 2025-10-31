@@ -1,35 +1,70 @@
 {% extends "base.html" %}
 {% block content %}
-<div id="chat-container">
-  <div id="chat-messages"></div>
-  <form id="chat-form">
-    <input type="text" id="user-input" placeholder="Écrivez ici..." autocomplete="off">
-    <button type="submit">Envoyer</button>
+<div class="chat-wrap">
+  <div class="chat-header">
+    <img id="bot-avatar" alt="Avatar" />
+    <div id="bot-title">Betty</div>
+  </div>
+  <div id="chat-messages" class="chat-messages"></div>
+  <form id="chat-form" class="chat-form" autocomplete="off">
+    <input id="user-input" type="text" placeholder="Écrivez et appuyez sur Entrée…" />
+    <button type="submit" class="btn">Envoyer</button>
   </form>
 </div>
-<script>
-const botId = new URLSearchParams(window.location.search).get('bot_id');
 
-async function sendMessage(message) {
-  const res = await fetch("/api/bettybot", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ message, bot_id: botId })
-  });
-  const data = await res.json();
-  return data.response;
+<script>
+const params = new URLSearchParams(window.location.search);
+const botId = params.get('bot_id') || 'avocat-001';
+
+const avatarEl = document.getElementById('bot-avatar');
+const titleEl  = document.getElementById('bot-title');
+const msgsEl   = document.getElementById('chat-messages');
+const formEl   = document.getElementById('chat-form');
+const inputEl  = document.getElementById('user-input');
+
+function pushMsg(text, who) {
+  const wrap = document.createElement('div');
+  wrap.className = 'msg ' + (who === 'user' ? 'user' : 'bot');
+  wrap.textContent = text;
+  msgsEl.appendChild(wrap);
+  msgsEl.scrollTop = msgsEl.scrollHeight;
 }
 
-document.querySelector("#chat-form").addEventListener("submit", async e => {
+async function loadMeta() {
+  try {
+    const r = await fetch(`/api/bot_meta?bot_id=${encodeURIComponent(botId)}`);
+    if (!r.ok) return;
+    const meta = await r.json();
+    if (meta.name)  titleEl.textContent = meta.name;
+    if (meta.avatar_url) avatarEl.src = meta.avatar_url;
+  } catch(_){}
+}
+loadMeta();
+pushMsg("Bonjour, je suis Betty. Comment puis-je vous aider ?", "bot");
+
+let busy = false;
+formEl.addEventListener('submit', async (e) => {
   e.preventDefault();
-  const input = document.querySelector("#user-input");
-  const msg = input.value;
-  input.value = "";
-  const response = await sendMessage(msg);
-  document.querySelector("#chat-messages").innerHTML += `
-    <div class="user">${msg}</div>
-    <div class="bot">${response}</div>
-  `;
+  const text = (inputEl.value || "").trim();
+  if (!text || busy) return;
+  pushMsg(text, 'user');
+  inputEl.value = '';
+  busy = true;
+
+  try {
+    const res = await fetch('/api/bettybot', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ message: text, bot_id: botId })
+    });
+    const data = await res.json();
+    pushMsg((data && data.response) ? data.response : "Désolé, une erreur est survenue.", 'bot');
+  } catch (_) {
+    pushMsg("Erreur réseau. Réessayez dans un instant.", 'bot');
+  } finally {
+    busy = false;
+    inputEl.focus();
+  }
 });
 </script>
 {% endblock %}
