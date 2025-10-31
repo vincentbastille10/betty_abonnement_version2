@@ -175,7 +175,7 @@
   const form     = document.getElementById('form');
   const input    = document.getElementById('input');
 
-  // Saisie sans clic : si on tape, focus auto et on insère le caractère
+  // Focus intelligent : taper n'importe où = focus sur l'input
   document.addEventListener('keydown', (e) => {
     const ign = ['Enter','Escape','Tab'];
     if (ign.includes(e.key)) return;
@@ -190,6 +190,7 @@
 
   function scrollToBottom(){ msgs.scrollTop = msgs.scrollHeight; }
 
+  // Meta bot
   fetch(`/api/bot_meta?bot_id=${encodeURIComponent(botId)}`)
     .then(r => r.json())
     .then(meta => {
@@ -200,6 +201,7 @@
       scrollToBottom();
     }).catch(()=>{});
 
+  // Bulle
   function addBubble(text, mine=false){
     const div = document.createElement('div');
     div.className = 'bubble';
@@ -214,14 +216,36 @@
     else    { div.style.background='#111827'; div.style.marginRight='auto'; }
     msgs.appendChild(div);
     scrollToBottom();
+    return div;
   }
 
+  // Loader "Betty écrit…"
+  function showTyping(){
+    const t = document.createElement('div');
+    t.className = 'bubble typing';
+    t.style.maxWidth = '280px';
+    t.style.border = '1px solid var(--border)';
+    t.style.borderRadius = '12px';
+    t.style.padding = '12px';
+    t.style.margin = '8px 0';
+    t.style.background = '#111827';
+    t.style.marginRight = 'auto';
+    t.innerHTML = '<span class="label">Betty écrit</span><span class="dots"><i></i><i></i><i></i></span>';
+    msgs.appendChild(t);
+    scrollToBottom();
+    return t;
+  }
+  function hideTyping(el){ if(el && el.parentNode) el.parentNode.removeChild(el); }
+
+  // Submit
   form.addEventListener('submit', async (e)=>{
     e.preventDefault();
     const text = input.value.trim();
     if(!text) return;
     addBubble(text, true);
     input.value = '';
+
+    const typing = showTyping();
     try {
       const r = await fetch('/api/bettybot', {
         method:'POST',
@@ -229,8 +253,10 @@
         body: JSON.stringify({ message: text, bot_id: botId })
       });
       const j = await r.json();
+      hideTyping(typing);
       addBubble(j.response || "Désolé, une erreur est survenue.");
     } catch {
+      hideTyping(typing);
       addBubble("Désolé, une erreur est survenue.");
     }
   });
