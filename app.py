@@ -1,5 +1,5 @@
 # app.py
-from flask import Flask, render_template, request, jsonify, redirect, url_for, session
+from flask import Flask, render_template, request, jsonify, redirect, url_for, session, make_response
 import os, yaml, requests, re, stripe, json
 import uuid, hashlib
 
@@ -28,10 +28,23 @@ MJ_API_SECRET = os.getenv("MJ_API_SECRET", "").strip()
 MJ_FROM_EMAIL = os.getenv("MJ_FROM_EMAIL", "no-reply@spectramedia.ai").strip()
 MJ_FROM_NAME  = os.getenv("MJ_FROM_NAME", "Spectra Media AI").strip()
 
-# Expose BASE_URL dans les templates (après définition de BASE_URL)
+# Expose BASE_URL dans les templates
 def _expose_base_url():
     app.jinja_env.globals['BASE_URL'] = BASE_URL
 _expose_base_url()
+
+# =========================
+# HEADERS pour autoriser l'embed (Wix/Webflow/Squarespace)
+# =========================
+@app.after_request
+def allow_iframe(resp):
+    # Autoriser l'iframe de partout (si tu veux limiter : remplace * par ton domaine)
+    resp.headers['X-Frame-Options'] = 'ALLOWALL'
+    # Autoriser les ancêtres (pages hôtes)
+    csp = resp.headers.get('Content-Security-Policy', '')
+    if "frame-ancestors" not in csp:
+        resp.headers['Content-Security-Policy'] = "frame-ancestors *"
+    return resp
 
 # =========================
 # HELPERS
@@ -109,18 +122,11 @@ def query_llm(user_input: str, pack_name: str, profile: dict = None, greeting: s
     try:
         r = requests.post(TOGETHER_API_URL, headers=headers, json=payload, timeout=30)
         if not r.ok:
-            try:
-                err = r.json()
-            except Exception:
-                err = {"status": r.status_code, "text": r.text[:200]}
+            try: err = r.json()
+            except Exception: err = {"status": r.status_code, "text": r.text[:200]}
             return f"⚠️ Erreur Together: {err}"
         data = r.json()
-        content = (
-            data.get("choices", [{}])[0]
-                .get("message", {})
-                .get("content", "")
-                .strip()
-        )
+        content = (data.get("choices", [{}])[0].get("message", {}).get("content", "")).strip()
         return content or "Désolé, je n’ai pas pu générer de réponse."
     except Exception as e:
         print("[LLM ERROR]", type(e).__name__, e)
@@ -137,18 +143,11 @@ def call_llm_with_history(system_prompt: str, history: list, user_input: str) ->
     try:
         r = requests.post(TOGETHER_API_URL, headers=headers, json=payload, timeout=30)
         if not r.ok:
-            try:
-                err = r.json()
-            except Exception:
-                err = {"status": r.status_code, "text": r.text[:200]}
+            try: err = r.json()
+            except Exception: err = {"status": r.status_code, "text": r.text[:200]}
             return f"⚠️ Erreur Together: {err}"
         data = r.json()
-        content = (
-            data.get("choices", [{}])[0]
-                .get("message", {})
-                .get("content", "")
-                .strip()
-        )
+        content = (data.get("choices", [{}])[0].get("message", {}).get("content", "")).strip()
         return content or "Désolé, je n’ai pas pu générer de réponse."
     except Exception as e:
         print("[LLM ERROR]", type(e).__name__, e)
@@ -165,26 +164,28 @@ def parse_contact_info(text: str) -> dict:
     m = re.search(r'(nom|cabinet|agence)\s*:\s*(.+)', text, re.I);   d["name"]    = m.group(2).strip() if m else None
     return {k: v for k, v in d.items() if v}
 
-LEAD_TAG_RE = re.compile(r"<LEAD_JSON>(\{.*?\})</LEAD_JSON>$")
+# === Nettoyage robuste du LEAD_JSON (pas d'affichage dans l'UI) ===
+LEAD_TAG_RE = re.compile(r"<LEAD_JSON>(\{.*?\})</LEAD_JSON>\s*\Z", re.S)
+
+def strip_lead_anywhere(text: str) -> str:
+    if not text:
+        return text
+    return re.sub(r"\s*<LEAD_JSON>.*?</LEAD_JSON>\s*", "", text, flags=re.S).strip()
 
 def extract_lead_json(text: str):
     if not text:
         return text, None
     m = LEAD_TAG_RE.search(text)
-    if not m:
-        return text, None
-    lead_raw = m.group(1)
-    message = text[:m.start()].rstrip()
-    try:
-        lead = json.loads(lead_raw)
-    except Exception:
-        lead = None
-    return message, lead
+    lead = None
+    if m:
+        try:
+            lead = json.loads(m.group(1))
+        except Exception:
+            lead = None
+    cleaned = strip_lead_anywhere(text)
+    return cleaned, lead
 
 def send_lead_email(to_email: str, lead: dict, bot_name: str = "Betty Bot"):
-    """
-    Envoi via Mailjet si configuré, sinon no-op avec log.
-    """
     if not (MJ_API_KEY and MJ_API_SECRET and to_email):
         print("[LEAD][MAILJET] Config manquante ou email vide, email non envoyé.")
         return
@@ -303,37 +304,43 @@ def recap_page():
     bot = BOTS.get(bot_key, {})
 
     public_id = bot.get("public_id")
-    owner     = bot.get("owner_name") or ""
-    display   = bot.get("name") or "Betty Bot"
+    owner     = bot.get("owner_name") or "Client"
+    # Libellé pack pour le nom complet
+    pack_label = {"avocat":"Avocat","immo":"Immobilier","medecin":"Médecin"}.get(bot.get("pack",""), bot.get("pack",""))
+    full_name  = f"Betty Bot ({pack_label}) — {owner}"
 
-    # si pas de public_id (ex: retour direct sans webhook Stripe en dev), on accepte un override via URL
+    # override via URL si besoin (dev)
     public_id = request.args.get("public_id", public_id)
     owner     = request.args.get("owner", owner)
 
-    # si toujours rien -> on affiche une note au template
-    embed_code = ""
-    if public_id:
-        full_name = f"{display} — {owner}" if owner else display
-        embed_code = (
-            f'<!-- Betty Bots — propulsé par Spectra Media AI -->\n'
-            f'<script async id="betty-widget"\n'
-            f'  src="{BASE_URL}/static/widget.js"\n'
-            f'  data-bot-id="{public_id}"\n'
-            f'  data-bot-name="{full_name}"></script>'
-        )
-
     return render_template(
         "recap.html",
+        base_url=BASE_URL,
         pack=pack,
-        bot_name=(f"{display} — {owner}" if owner else display),
-        public_id=public_id,
-        embed_code=embed_code,
+        owner=owner,
+        public_id=public_id or "",
         title="Récapitulatif"
     )
 
 @app.route("/chat")
 def chat_page():
     return render_template("chat.html", title="Betty — Chat")
+
+# Page d’embed dédiée (affichage direct dans iframe)
+@app.route("/embed")
+def embed():
+    public_id = (request.args.get("public_id") or "").strip()
+    if not public_id:
+        return "missing public_id", 400
+    bot = next((b for b in BOTS.values() if b.get("public_id") == public_id), None)
+    if not bot:
+        return "bot not found", 404
+    return render_template(
+        "embed.html",
+        public_id=public_id,
+        bot_name=(bot.get("name") or "Betty Bot"),
+        color=(bot.get("color") or "#4F46E5")
+    )
 
 # =========================
 # API
@@ -342,12 +349,16 @@ def chat_page():
 def bettybot_reply():
     payload    = request.get_json(force=True, silent=True) or {}
     user_input = (payload.get("message") or "").strip()
-    bot_id     = payload.get("bot_id", "avocat-001")
+    bot_id     = payload.get("bot_id", "avocat-001")   # peut être un public_id
 
     if not user_input:
         return jsonify({"response": "Dites-moi ce dont vous avez besoin 🙂"}), 200
 
+    # Résolution public_id -> clé interne si nécessaire
     bot = BOTS.get(bot_id)
+    if not bot:
+        # tenter via public_id
+        bot = next((b for b in BOTS.values() if b.get("public_id") == bot_id), None)
     if not bot:
         try:
             parts = bot_id.split("-")
