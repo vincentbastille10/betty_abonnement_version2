@@ -4,76 +4,56 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Betty Bots — Récap & Intégration</title>
-
-  <!-- Fonts -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
-
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700;800&display=swap" rel="stylesheet">
   <style>
-    :root{
-      --bg1:#0f1020; --bg2:#0a0b15; --card:#0f1224; --muted:#9aa3b2; --text:#f7f8fb; --brand1:#4f46e5; --brand2:#7c3aed; --ok:#10b981;
-      --ring: 0 0 0 2px rgba(79,70,229,.35), 0 10px 30px rgba(79,70,229,.25), inset 0 0 0 1px rgba(255,255,255,.03);
-    }
+    :root{--bg1:#0f1020;--bg2:#0b0c1a;--panel:#12142a;--muted:#a6b0c2;--text:#f8f9fc;--brand1:#4f46e5;--brand2:#7c3aed;--ok:#10b981}
     *{box-sizing:border-box}
     html,body{height:100%}
-    body{
-      margin:0; font-family:Inter,system-ui,Segoe UI,Roboto,Arial,sans-serif; color:var(--text);
-      background: radial-gradient(1200px 800px at 10% 10%, rgba(79,70,229,.15), transparent 60%),
-                  radial-gradient(900px 700px at 90% 20%, rgba(124,58,237,.12), transparent 65%),
+    body{margin:0;font-family:Inter,system-ui,Segoe UI,Roboto,Arial,sans-serif;color:var(--text);
+      background: radial-gradient(1000px 700px at 10% -10%, rgba(79,70,229,.18), transparent 60%),
+                  radial-gradient(900px 600px at 100% 0%, rgba(124,58,237,.14), transparent 60%),
                   linear-gradient(180deg,var(--bg1),var(--bg2));
-      display:flex; align-items:center; justify-content:center; padding:32px;
-    }
-    .wrap{width:min(1100px,100%);}
-    .header{display:flex; align-items:center; gap:16px; margin-bottom:18px}
-    .logo{
-      width:56px; height:56px; border-radius:14px; display:grid; place-items:center;
-      background: linear-gradient(135deg,var(--brand1),var(--brand2));
-      box-shadow:var(--ring);
-    }
-    .logo svg{width:32px; height:32px; filter:drop-shadow(0 2px 8px rgba(0,0,0,.35))}
-    h1{margin:0; font-weight:800; letter-spacing:.1px; font-size:clamp(22px,3vw,28px)}
-    .sub{margin:0; color:var(--muted); font-size:14px}
+      padding:28px}
+    .wrap{max-width:1200px;margin:0 auto}
+    .head{display:flex;align-items:center;gap:14px;margin-bottom:18px}
+    .logo{width:48px;height:48px;border-radius:12px;display:grid;place-items:center;background:linear-gradient(135deg,var(--brand1),var(--brand2));box-shadow:0 10px 30px rgba(79,70,229,.35)}
+    .logo svg{width:28px;height:28px}
+    h1{margin:0;font-size:clamp(22px,3vw,28px);font-weight:800;letter-spacing:.2px}
+    .sub{margin:0;color:var(--muted);font-size:13px}
 
-    .grid{display:grid; grid-template-columns: 1.2fr .8fr; gap:22px}
-    @media (max-width: 900px){ .grid{grid-template-columns:1fr;}}
+    .grid{display:grid;grid-template-columns:1.1fr .9fr;gap:22px}
+    @media (max-width: 980px){.grid{grid-template-columns:1fr}}
 
-    .card{background:rgba(17,22,45,.75); border:1px solid rgba(255,255,255,.06); border-radius:16px; padding:22px; box-shadow:0 15px 60px rgba(0,0,0,.35), inset 0 1px 0 rgba(255,255,255,.03)}
-    .title{display:flex; align-items:center; justify-content:space-between; gap:14px; margin-bottom:12px}
-    .title h2{margin:0; font-size:16px; font-weight:700; letter-spacing:.2px}
+    .card{background:rgba(18,20,42,.76);border:1px solid rgba(255,255,255,.06);border-radius:16px;padding:20px;box-shadow:0 16px 60px rgba(0,0,0,.35), inset 0 1px 0 rgba(255,255,255,.03)}
+    .title{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
+    .title h2{margin:0;font-size:16px;font-weight:700}
+    .badge{display:inline-flex;gap:8px;align-items:center;font-size:12px;background:rgba(16,185,129,.18);color:#b6f1da;border:1px solid rgba(16,185,129,.35);padding:6px 10px;border-radius:999px}
 
-    .kvs{display:flex; gap:12px; flex-wrap:wrap; margin:4px 0 14px}
-    .kv{background:rgba(255,255,255,.04); border:1px solid rgba(255,255,255,.06); padding:8px 10px; border-radius:10px; font-size:12px; color:#cbd5e1}
+    .row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+    @media (max-width:640px){.row{grid-template-columns:1fr}}
 
-    label{display:block; font-size:12px; color:#c7cbe0; margin:12px 0 6px}
-    input,select,textarea{width:100%; padding:12px 14px; border-radius:12px; border:1px solid rgba(255,255,255,.08); background:rgba(9,12,24,.65); color:var(--text); outline:none}
-    input:focus,select:focus,textarea:focus{box-shadow:var(--ring); border-color:transparent}
+    label{display:block;font-size:12px;color:#cdd4e5;margin:12px 0 6px}
+    input,select{width:100%;padding:12px 14px;border-radius:12px;border:1px solid rgba(255,255,255,.08);background:rgba(7,9,22,.65);color:var(--text);outline:none}
+    input:focus,select:focus{box-shadow:0 0 0 2px rgba(79,70,229,.35), 0 8px 24px rgba(79,70,229,.25);border-color:transparent}
 
-    .row{display:grid; grid-template-columns:1fr 1fr; gap:12px}
-    @media (max-width: 600px){ .row{grid-template-columns:1fr;} }
+    .codebox{position:relative}
+    textarea.code{width:100%;min-height:210px;max-height:340px;padding:14px 14px 46px;border-radius:14px;border:1px solid rgba(255,255,255,.08);background:linear-gradient(180deg,rgba(9,12,24,.88),rgba(7,9,18,.9));color:#e5e7eb;font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,"Liberation Mono",monospace;font-size:12.5px;line-height:1.5;resize:vertical;overflow:auto;white-space:pre}
+    .copyBar{position:absolute;right:8px;bottom:8px;display:flex;gap:8px}
+    .btn{appearance:none;border:none;padding:11px 14px;border-radius:12px;font-weight:700;cursor:pointer;transition:.2s ease}
+    .btn.primary{background:linear-gradient(135deg,var(--brand1),var(--brand2));color:#fff;box-shadow:0 0 0 2px rgba(79,70,229,.35), 0 10px 30px rgba(79,70,229,.25)}
+    .btn.ghost{background:rgba(255,255,255,.06);color:#e5e7eb;border:1px solid rgba(255,255,255,.08)}
 
-    .codebox{position:relative; background:linear-gradient(180deg,rgba(9,12,24,.8),rgba(7,9,18,.85)); border:1px solid rgba(255,255,255,.08); border-radius:14px; overflow:hidden}
-    .codebox pre{margin:0; padding:16px; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace; line-height:1.5; font-size:12.5px; color:#e5e7eb; max-height:260px; overflow:auto}
-
-    .btns{display:flex; gap:10px; flex-wrap:wrap}
-    .btn{appearance:none; border:none; padding:12px 14px; border-radius:12px; font-weight:700; cursor:pointer; transition:.2s ease; letter-spacing:.2px}
-    .btn.primary{background:linear-gradient(135deg,var(--brand1),var(--brand2)); color:white; box-shadow:var(--ring)}
-    .btn.ghost{background:rgba(255,255,255,.06); color:#e5e7eb; border:1px solid rgba(255,255,255,.08)}
-    .btn:hover{transform:translateY(-1px)}
-
-    .badge{display:inline-flex; gap:8px; align-items:center; font-size:12px; background:rgba(16,185,129,.15); color:#a7f3d0; border:1px solid rgba(16,185,129,.35); padding:6px 10px; border-radius:999px}
-
-    .previewWrap{background:radial-gradient(600px 300px at 70% -10%, rgba(79,70,229,.16), transparent 65%), rgba(255,255,255,.03); border:1px solid rgba(255,255,255,.06); border-radius:16px; padding:14px}
-    iframe{width:100%; height:540px; border:0; border-radius:12px; background:#0b0f1e}
-
-    .small{font-size:12px; color:#aab1c2}
+    .previewWrap{background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.06);border-radius:16px;padding:14px}
+    iframe{width:100%;height:540px;border:0;border-radius:12px;background:#0b0f1e}
+    .small{font-size:12px;color:#aab1c2}
   </style>
 </head>
 <body>
   <div class="wrap">
-    <div class="header">
+    <div class="head">
       <div class="logo" aria-hidden="true">
-        <!-- Simple B-bot mark -->
         <svg viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
           <path d="M10 34c-1.7-2.7-2.6-5.6-2.6-8.7C7.4 15.8 15.7 7.5 26 7.5S44.6 15.8 44.6 25.3c0 9.4-8.3 17.2-18.6 17.2-2.2 0-4.3-.3-6.3-.9l-9.7 2.4 2-9z" stroke="#fff" stroke-opacity=".9" stroke-width="2"/>
           <circle cx="26" cy="27" r="8" fill="#fff" fill-opacity=".92"/>
@@ -83,38 +63,34 @@
         </svg>
       </div>
       <div>
-        <h1>Betty <span style="font-weight:800; background:linear-gradient(135deg,var(--brand1),var(--brand2)); -webkit-background-clip:text; background-clip:text; color:transparent">Bots</span></h1>
+        <h1>Betty <span style="font-weight:800;background:linear-gradient(135deg,var(--brand1),var(--brand2));-webkit-background-clip:text;background-clip:text;color:transparent">Bots</span></h1>
         <p class="sub">propulsé par <strong>Spectra Media AI</strong></p>
       </div>
     </div>
 
     <div class="grid">
-      <!-- LEFT: Configuration + Code -->
+      <!-- GAUCHE: Form + Code -->
       <section class="card">
         <div class="title">
-          <h2>Votre widget d'intégration</h2>
-          <span class="badge" id="status">• prêt à copier</span>
-        </div>
-        <div class="kvs">
-          <div class="kv">Ultra simple</div>
-          <div class="kv">Copier/Coller</div>
-          <div class="kv">Responsive</div>
+          <h2>Code d'intégration</h2>
+          <span class="badge" id="state">• prêt à copier</span>
         </div>
 
         <div class="row">
           <div>
             <label for="botName">Nom complet du bot</label>
-            <input id="botName" placeholder="ex. Betty Bot – Avocat Paris" value="Mon Betty Bot" />
+            <input id="botName" placeholder="ex. Betty Bot — Avocat Paris">
           </div>
           <div>
-            <label for="botId">Identifiant unique (fourni après achat)</label>
-            <input id="botId" placeholder="ex. betty_7f2k9p" value="betty_xxxxxx" />
+            <label for="botId">Identifiant unique</label>
+            <input id="botId" placeholder="ex. betty_7f2k9p">
           </div>
         </div>
+        
         <div class="row">
           <div>
             <label for="color">Couleur hex</label>
-            <input id="color" value="#4F46E5" />
+            <input id="color" placeholder="#4F46E5">
           </div>
           <div>
             <label for="size">Taille du widget</label>
@@ -126,40 +102,23 @@
           </div>
         </div>
 
-        <label for="baseUrl">BASE_URL (si différent)</label>
-        <input id="baseUrl" placeholder="https://betty-abonnement-version2.vercel.app" value="https://betty-abonnement-version2.vercel.app" />
+        <label for="base">BASE_URL (optionnel)</label>
+        <input id="base" placeholder="https://betty-abonnement-version2.vercel.app">
 
-        <label>Code à intégrer sur votre site (Wix, Webflow, WordPress, HTML)</label>
-        <div class="codebox" id="codebox">
-<pre id="code">
-<!-- Betty Bots — propulsé par Spectra Media AI -->
-<link rel="preconnect" href="https://betty-abonnement-version2.vercel.app">
-<script
-  async
-  id="betty-widget"
-  src="https://betty-abonnement-version2.vercel.app/static/widget.js"
-  data-bot-id="betty_xxxxxx"
-  data-bot-name="Mon Betty Bot"
-  data-color="#4F46E5"
-  data-size="m"
-></script>
-</pre>
+        <label for="code">Collez ce code juste avant <code>&lt;/body&gt;</code> de votre site</label>
+        <div class="codebox">
+          <textarea id="code" class="code" readonly></textarea>
+          <div class="copyBar">
+            <button class="btn ghost" id="open">Aperçu</button>
+            <button class="btn primary" id="copy">Copier</button>
+          </div>
         </div>
-
-        <div class="btns" style="margin-top:12px">
-          <button class="btn primary" id="copyBtn">Copier</button>
-          <button class="btn ghost" id="preview">Aperçu dans la page</button>
-        </div>
-
-        <p class="small" style="margin-top:10px">Collez ce code juste avant <code>&lt;/body&gt;</code> de votre site. Le script chargera automatiquement votre bot identifié par <em>data-bot-id</em>.</p>
+        <p class="small">Astuce : vous pouvez appeler cette page avec des paramètres d’URL pour préremplir automatiquement (ex. <code>?bot_id=betty_abc123&bot_name=Studio%20Lex&color=%234F46E5&size=m&base=https://betty-abonnement-version2.vercel.app</code>).</p>
       </section>
 
-      <!-- RIGHT: Live preview -->
+      <!-- DROITE: Aperçu -->
       <aside class="card">
-        <div class="title">
-          <h2>Aperçu</h2>
-          <span class="sub">Simulation embarquée</span>
-        </div>
+        <div class="title"><h2>Aperçu</h2><span class="sub">Simulation embarquée</span></div>
         <div class="previewWrap">
           <iframe id="live" title="Aperçu du bot" srcdoc="<html><body style='margin:0;background:#0b0f1e;color:#cbd5e1;font-family:Inter,system-ui,sans-serif;display:grid;place-items:center;height:100%'><main style='text-align:center'><h3 style='margin:0 0 6px'>Prévisualisation</h3><p style='margin:0 0 14px;font-size:14px;opacity:.8'>Le widget se chargera ici.</p><div style='display:inline-block;padding:8px 12px;border-radius:10px;border:1px solid rgba(255,255,255,.12);opacity:.6'>En attente du script…</div></main></body></html>"></iframe>
         </div>
@@ -168,49 +127,37 @@
   </div>
 
   <script>
-    const codePre = document.getElementById('code');
-    const copyBtn = document.getElementById('copyBtn');
-    const botName = document.getElementById('botName');
-    const botId = document.getElementById('botId');
-    const color = document.getElementById('color');
-    const size = document.getElementById('size');
-    const baseUrl = document.getElementById('baseUrl');
-    const status = document.getElementById('status');
-    const live = document.getElementById('live');
+    const $ = (id)=>document.getElementById(id);
+    const el = {name:$('botName'), id:$('botId'), color:$('color'), size:$('size'), base:$('base'), code:$('code'), copy:$('copy'), open:$('open'), state:$('state'), live:$('live')};
 
-    function buildCode(){
-      const url = (baseUrl.value || '').replace(/\/$/, '');
-      const html = `<!-- Betty Bots — propulsé par Spectra Media AI -->\n<link rel=\"preconnect\" href=\"${url}\">\n<script\n  async\n  id=\"betty-widget\"\n  src=\"${url}/static/widget.js\"\n  data-bot-id=\"${botId.value}\"\n  data-bot-name=\"${botName.value.replace(/\"/g,'\\\"')}\"\n  data-color=\"${color.value}\"\n  data-size=\"${size.value}\"\n></script>`;
-      codePre.textContent = html;
-      status.textContent = '• prêt à copier';
+    // 1) Récupération des paramètres d’URL pour rendre la page statique mais personnalisable par client
+    const params = new URLSearchParams(location.search);
+    el.name.value  = params.get('bot_name') || 'Mon Betty Bot';
+    el.id.value    = params.get('bot_id')   || 'betty_xxxxxx';
+    el.color.value = params.get('color')    || '#4F46E5';
+    el.size.value  = params.get('size')     || 'm';
+    el.base.value  = params.get('base')     || 'https://betty-abonnement-version2.vercel.app';
+
+    function build(){
+      const url = (el.base.value || '').replace(/\/$/, '');
+      const code = `<!-- Betty Bots — propulsé par Spectra Media AI -->\n<link rel=\"preconnect\" href=\"${url}\">\n<script\n  async\n  id=\"betty-widget\"\n  src=\"${url}/static/widget.js\"\n  data-bot-id=\"${el.id.value}\"\n  data-bot-name=\"${el.name.value.replace(/\"/g,'\\\"')}\"\n  data-color=\"${el.color.value}\"\n  data-size=\"${el.size.value}\"\n></script>`;
+      el.code.value = code;
+      el.state.textContent = '• prêt à copier';
     }
 
-    [botName, botId, color, size, baseUrl].forEach(el=> el.addEventListener('input', buildCode));
-    buildCode();
+    ['input','change'].forEach(evt=>{
+      [el.name, el.id, el.color, el.size, el.base].forEach(x=> x.addEventListener(evt, build));
+    });
+    build();
 
-    copyBtn.addEventListener('click', async () =>{
-      try{
-        await navigator.clipboard.writeText(codePre.textContent);
-        copyBtn.textContent = 'Copié !';
-        copyBtn.style.background = 'linear-gradient(135deg,var(--ok),#1dd1a1)';
-        setTimeout(()=>{
-          copyBtn.textContent = 'Copier';
-          copyBtn.style.background = '';
-          copyBtn.classList.add('primary');
-        }, 1400);
-      }catch(e){
-        const sel = window.getSelection();
-        const range = document.createRange();
-        range.selectNodeContents(codePre);
-        sel.removeAllRanges(); sel.addRange(range);
-        alert('Sélection copiée — si la copie auto échoue, utilisez ⌘/Ctrl+C.');
-      }
+    el.copy.addEventListener('click', async ()=>{
+      try{ await navigator.clipboard.writeText(el.code.value); el.copy.textContent='Copié !'; el.copy.style.background='linear-gradient(135deg,var(--ok),#1dd1a1)'; setTimeout(()=>{ el.copy.textContent='Copier'; el.copy.style.background=''; },1300);}catch(e){ el.code.select(); document.execCommand('copy'); }
     });
 
-    document.getElementById('preview').addEventListener('click', ()=>{
-      const url = (baseUrl.value || '').replace(/\/$/, '');
-      const html = `<!doctype html><html><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"></head><body style=\"margin:0;background:#0b0f1e;height:100vh\">\n<script async id=\"betty-widget\" src=\"${url}/static/widget.js\" data-bot-id=\"${botId.value}\" data-bot-name=\"${botName.value.replace(/\"/g,'\\\"')}\" data-color=\"${color.value}\" data-size=\"${size.value}\"></script>\n</body></html>`;
-      live.srcdoc = html;
+    el.open.addEventListener('click', ()=>{
+      const url = (el.base.value || '').replace(/\/$/, '');
+      const html = `<!doctype html><html><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"></head><body style=\"margin:0;background:#0b0f1e;height:100vh\">\n<script async id=\"betty-widget\" src=\"${url}/static/widget.js\" data-bot-id=\"${el.id.value}\" data-bot-name=\"${el.name.value.replace(/\"/g,'\\\"')}\" data-color=\"${el.color.value}\" data-size=\"${el.size.value}\"></script>\n</body></html>`;
+      el.live.srcdoc = html;
     });
   </script>
 </body>
