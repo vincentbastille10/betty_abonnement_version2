@@ -301,12 +301,17 @@ def recap_page():
     pack = request.args.get("pack", "avocat")
     bot_key = "avocat-001" if pack=="avocat" else ("medecin-003" if pack=="medecin" else "immo-002")
     bot = BOTS.get(bot_key, {})
+    owner = bot.get("owner_name") or "Client"
+    display_name = bot.get("name") or "Betty Bot"
+    full_name = f"{display_name} — {owner}"  # nom complet montré à l’acheteur
     return render_template(
         "recap.html",
-        pack=pack,
+        title="Récapitulatif",
+        base_url=BASE_URL,
         public_id=bot.get("public_id"),
-        owner=bot.get("owner_name"),
-        title="Récapitulatif"
+        owner=owner,
+        display_name=display_name,
+        full_name=full_name
     )
 
 @app.route("/chat")
