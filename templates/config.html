@@ -10,21 +10,21 @@
     <div class="avatar-grid" id="packs">
       <label class="avatar-card" data-pack="avocat">
         <input type="radio" name="pack" value="avocat" checked>
-        <img src="{{ url_for('static', filename='avocat.png') }}" onerror="this.src='https://api.dicebear.com/8.x/shapes/png?seed=avocat'">
+        <img src="{{ url_for('static', filename='avocat.jpg') }}" onerror="this.src='https://api.dicebear.com/8.x/shapes/png?seed=avocat'">
         <span>Avocat</span>
       </label>
       <label class="avatar-card" data-pack="medecin">
         <input type="radio" name="pack" value="medecin">
-        <img src="{{ url_for('static', filename='medecin.png') }}" onerror="this.src='https://api.dicebear.com/8.x/shapes/png?seed=medecin'">
+        <img src="{{ url_for('static', filename='medecin.jpg') }}" onerror="this.src='https://api.dicebear.com/8.x/shapes/png?seed=medecin'">
         <span>Médecin</span>
       </label>
       <label class="avatar-card" data-pack="immo">
         <input type="radio" name="pack" value="immo">
-        <img src="{{ url_for('static', filename='immo.png') }}" onerror="this.src='https://api.dicebear.com/8.x/shapes/png?seed=immo'">
+        <img src="{{ url_for('static', filename='immo.jpg') }}" onerror="this.src='https://api.dicebear.com/8.x/shapes/png?seed=immo'">
         <span>Immobilier</span>
       </label>
     </div>
-    <input type="hidden" name="avatar" id="avatar-file" value="avocat.png">
+    <input type="hidden" name="avatar" id="avatar-file" value="avocat.jpg">
   </div>
 
   <!-- Couleur -->
@@ -83,7 +83,7 @@
       card.classList.add('selected');
       card.querySelector('input').checked = true;
       const p = card.dataset.pack;
-      avatarFile.value = (p==='avocat'?'avocat.png':(p==='medecin'?'medecin.png':'immo.png'));
+      avatarFile.value = (p==='avocat'?'avocat.jpg':(p==='medecin'?'medecin.jpg':'immo.jpg'));
     });
   });
 
@@ -105,10 +105,9 @@
     const x = Math.max(0, Math.min(clientX - r.left, r.width));
     const y = Math.max(0, Math.min(clientY - r.top,  r.height));
     dot.style.left = (x-9)+'px'; dot.style.top = (y-9)+'px';
-    inputX.value = ((x/r.width)*2-1).toFixed(2);      // -1=G (Empathique), +1=D (Efficace)
-    inputY.value = (-((y/r.height)*2-1)).toFixed(2);  // -1=Bas (Précise), +1=Haut (Chaleureuse)
+    inputX.value = ((x/r.width)*2-1).toFixed(2);
+    inputY.value = (-((y/r.height)*2-1)).toFixed(2);
   }
-  // centre par défaut
   setTimeout(()=>{ const r=axes.getBoundingClientRect(); setDotAt(r.left+r.width/2, r.top+r.height/2); },0);
   axes.addEventListener('pointerdown', e=>{
     setDotAt(e.clientX, e.clientY);
