@@ -1,119 +1,204 @@
 {% extends "base.html" %}
 {% block content %}
+
 <h1>Configurer votre chatbot</h1>
-<p class="hint">Choisissez un métier, une couleur, ajustez la personnalité, ajoutez votre message d’accueil et vos coordonnées.</p>
+<p class="intro">Choisissez un métier, une couleur, ajustez la personnalité et personnalisez le message d’accueil.</p>
 
-<form class="form" method="post" id="config-form">
-  <!-- Métier -->
-  <div>
-    <div class="label">Métier</div>
-    <div class="avatar-grid" id="packs">
-      <label class="avatar-card" data-pack="avocat">
+<form method="POST" action="{{ url_for('config_page') }}" id="cfg-form" class="cfg-grid">
+
+  <!-- Métier / Avatar -->
+  <section class="card">
+    <h2>Métier</h2>
+    <div class="avatar-grid">
+      <!-- Avocat -->
+      <label class="avatar-card">
         <input type="radio" name="pack" value="avocat" checked>
-        <img src="{{ url_for('static', filename='avocat.jpg') }}" onerror="this.src='https://api.dicebear.com/8.x/shapes/png?seed=avocat'">
-        <span>Avocat</span>
+        <img src="{{ url_for('static', filename='avocat.jpg') }}" alt="Avocat">
+        <div class="a-label">Avocat</div>
+        <!-- on envoie aussi le fichier avatar -->
+        <input type="hidden" name="avatar" value="avocat.jpg">
       </label>
-      <label class="avatar-card" data-pack="medecin">
+
+      <!-- Médecin -->
+      <label class="avatar-card">
         <input type="radio" name="pack" value="medecin">
-        <img src="{{ url_for('static', filename='medecin.jpg') }}" onerror="this.src='https://api.dicebear.com/8.x/shapes/png?seed=medecin'">
-        <span>Médecin</span>
+        <img src="{{ url_for('static', filename='medecin.jpg') }}" alt="Médecin">
+        <div class="a-label">Médecin</div>
+        <input type="hidden" name="avatar" value="medecin.jpg">
       </label>
-      <label class="avatar-card" data-pack="immo">
+
+      <!-- Immobilier -->
+      <label class="avatar-card">
         <input type="radio" name="pack" value="immo">
-        <img src="{{ url_for('static', filename='immo.jpg') }}" onerror="this.src='https://api.dicebear.com/8.x/shapes/png?seed=immo'">
-        <span>Immobilier</span>
+        <img src="{{ url_for('static', filename='immo.jpg') }}" alt="Immobilier">
+        <div class="a-label">Immobilier</div>
+        <input type="hidden" name="avatar" value="immo.jpg">
+      </label>
+
+      <!-- (Optionnel) Notaire -->
+      <label class="avatar-card">
+        <input type="radio" name="pack" value="notaire">
+        <img src="{{ url_for('static', filename='notaire.jpg') }}" alt="Notaire" onerror="this.parentElement.style.display='none'">
+        <div class="a-label">Notaire</div>
+        <input type="hidden" name="avatar" value="notaire.jpg">
       </label>
     </div>
-    <input type="hidden" name="avatar" id="avatar-file" value="avocat.jpg">
-  </div>
+    <small class="hint">Cliquez pour sélectionner. Taille d’affichage : 4 cm × 4 cm.</small>
+  </section>
 
-  <!-- Couleur -->
-  <div>
-    <div class="label">Couleur</div>
-    <div class="swatches" id="swatches">
-      <label class="swatch selected"><input type="radio" name="color" value="#4F46E5" checked><span class="chip" style="background:#4F46E5"></span></label>
-      <label class="swatch"><input type="radio" name="color" value="#16A34A"><span class="chip" style="background:#16A34A"></span></label>
-      <label class="swatch"><input type="radio" name="color" value="#0284C7"><span class="chip" style="background:#0284C7"></span></label>
-      <label class="swatch"><input type="radio" name="color" value="#F59E0B"><span class="chip" style="background:#F59E0B"></span></label>
-      <label class="swatch"><input type="radio" name="color" value="#DC2626"><span class="chip" style="background:#DC2626"></span></label>
-      <label class="swatch"><input type="radio" name="color" value="#9333EA"><span class="chip" style="background:#9333EA"></span></label>
+  <!-- Couleurs -->
+  <section class="card">
+    <h2>Couleur</h2>
+    <div class="color-grid">
+      <label class="color-swatch" style="--c:#4F46E5">
+        <input type="radio" name="color" value="#4F46E5" checked>
+      </label>
+      <label class="color-swatch" style="--c:#16A34A">
+        <input type="radio" name="color" value="#16A34A">
+      </label>
+      <label class="color-swatch" style="--c:#0284C7">
+        <input type="radio" name="color" value="#0284C7">
+      </label>
+      <label class="color-swatch" style="--c:#DB2777">
+        <input type="radio" name="color" value="#DB2777">
+      </label>
+      <label class="color-swatch" style="--c:#F59E0B">
+        <input type="radio" name="color" value="#F59E0B">
+      </label>
+      <label class="color-swatch" style="--c:#10B981">
+        <input type="radio" name="color" value="#10B981">
+      </label>
     </div>
-  </div>
+  </section>
 
-  <!-- Curseur 2D -->
-  <div>
-    <div class="label">Personnalité</div>
+  <!-- Personnalité (curseur 2D) -->
+  <section class="card">
+    <h2>Personnalité</h2>
     <div class="axes-wrap">
-      <div class="axes" id="axes">
-        <div class="axes-dot" id="axes-dot"></div>
-        <div class="axes-line h"></div><div class="axes-line v"></div>
-        <div class="axes-label top">Chaleureuse</div>
-        <div class="axes-label bottom">Précise</div>
-        <div class="axes-label left">Empathique</div>
-        <div class="axes-label right">Efficace</div>
+      <div class="axis-label top">Chaleureuse</div>
+      <div class="axis-label left">Empathique</div>
+      <div class="joystick" id="joy">
+        <div class="thumb" id="thumb"></div>
       </div>
-      <input type="hidden" name="persona_x" id="persona_x" value="0">
-      <input type="hidden" name="persona_y" id="persona_y" value="0">
+      <div class="axis-label right">Efficace</div>
+      <div class="axis-label bottom">Précise</div>
     </div>
-  </div>
+    <input type="hidden" name="persona_x" id="persona_x" value="0">
+    <input type="hidden" name="persona_y" id="persona_y" value="0">
+    <small class="hint">Déplacez le curseur dans la zone : gauche = empathique, droite = efficace, haut = chaleureuse, bas = précise.</small>
+  </section>
 
-  <!-- Greeting -->
-  <div>
-    <div class="label">Message d’accueil</div>
-    <input type="text" name="greeting" value="Bonjour, je suis Betty. Comment puis-je vous aider ?">
-  </div>
+  <!-- Contenus -->
+  <section class="card">
+    <h2>Contenus</h2>
+    <label class="field">
+      <span>Message d’accueil</span>
+      <input type="text" name="greeting" placeholder="Bonjour, je suis Betty. Comment puis-je vous aider ?">
+    </label>
 
-  <!-- Coordonnées (pour alimenter le bot vendu) -->
-  <div>
-    <div class="label">Vos coordonnées (tél., adresse, horaires, email…)</div>
-    <textarea name="contact_info" rows="3" placeholder="Ex. Cabinet Dupond — 02 43 00 00 00 — 12 rue de la Paix, 72000 Le Mans — Horaires: Lun-Ven 9h-18h — contact@exemple.com"></textarea>
-  </div>
+    <label class="field">
+      <span>Informations établissement (téléphone, email, adresse, horaires…)</span>
+      <textarea name="contact_info" rows="4" placeholder="Nom : Cabinet Dupont
+Téléphone : 02 43 XX XX XX
+Email : contact@cabinet-dupont.fr
+Adresse : 12 rue de la République, 72000 Le Mans
+Horaires : Lun–Ven 9h–12h / 14h–18h"></textarea>
+    </label>
+  </section>
 
-  <button class="btn primary" type="submit">Enregistrer et payer</button>
+  <!-- CTA -->
+  <div class="cta">
+    <button type="submit" class="btn primary big">Enregistrer et s’abonner</button>
+  </div>
 </form>
 
 <script>
-  // Sélection visuelle des cartes métier
-  const packs = document.getElementById('packs');
-  const avatarFile = document.getElementById('avatar-file');
-  packs.querySelectorAll('.avatar-card').forEach(card=>{
-    if(card.querySelector('input').checked) card.classList.add('selected');
-    card.addEventListener('click', ()=>{
-      packs.querySelectorAll('.avatar-card').forEach(c=>c.classList.remove('selected'));
+  // --- Sélection avatar : quand on clique sur un avatar, mettre le bon fichier 'avatar' lié au pack ---
+  const avatarCards = document.querySelectorAll('.avatar-card');
+  avatarCards.forEach(card => {
+    card.addEventListener('click', () => {
+      // retire l'état sélectionné visuel
+      avatarCards.forEach(c => c.classList.remove('selected'));
       card.classList.add('selected');
-      card.querySelector('input').checked = true;
-      const p = card.dataset.pack;
-      avatarFile.value = (p==='avocat'?'avocat.jpg':(p==='medecin'?'medecin.jpg':'immo.jpg'));
+
+      // garde le <input name="avatar"> du label cliqué et désactive les autres
+      const packInput = card.querySelector('input[type="radio"][name="pack"]');
+      const allPackInputs = document.querySelectorAll('input[type="radio"][name="pack"]');
+      allPackInputs.forEach(r => r.checked = false);
+      packInput.checked = true;
+
+      // synchronise le champ avatar caché global: on prend la valeur du hidden de la carte
+      const avatarFile = card.querySelector('input[type="hidden"][name="avatar"]').value;
+      // crée/maj un input hidden global unique "avatar" pour le form
+      let globalAvatar = document.querySelector('input[name="_avatar_global"]');
+      if(!globalAvatar){
+        globalAvatar = document.createElement('input');
+        globalAvatar.type = 'hidden';
+        globalAvatar.name = '_avatar_global';
+        document.getElementById('cfg-form').appendChild(globalAvatar);
+      }
+      globalAvatar.value = avatarFile;
     });
   });
 
-  // Sélection visuelle des swatches
-  const swatches = document.getElementById('swatches');
-  swatches.querySelectorAll('.swatch').forEach(s=>{
-    s.addEventListener('click', ()=>{
-      swatches.querySelectorAll('.swatch').forEach(x=>x.classList.remove('selected'));
-      s.classList.add('selected');
-      s.querySelector('input').checked = true;
-    });
+  // Au submit, remap _avatar_global -> avatar (compat route)
+  document.getElementById('cfg-form').addEventListener('submit', (e)=>{
+    const gv = document.querySelector('input[name="_avatar_global"]');
+    if(gv){
+      const real = document.createElement('input');
+      real.type = 'hidden';
+      real.name = 'avatar';
+      real.value = gv.value || 'avocat.jpg';
+      e.target.appendChild(real);
+    }
   });
 
-  // Curseur 2D
-  const axes = document.getElementById('axes'); const dot = document.getElementById('axes-dot');
-  const inputX = document.getElementById('persona_x'); const inputY = document.getElementById('persona_y');
-  function setDotAt(clientX, clientY){
-    const r = axes.getBoundingClientRect();
-    const x = Math.max(0, Math.min(clientX - r.left, r.width));
-    const y = Math.max(0, Math.min(clientY - r.top,  r.height));
-    dot.style.left = (x-9)+'px'; dot.style.top = (y-9)+'px';
-    inputX.value = ((x/r.width)*2-1).toFixed(2);
-    inputY.value = (-((y/r.height)*2-1)).toFixed(2);
+  // --- Joystick 2D (axes -1..+1) ---
+  const joy = document.getElementById('joy');
+  const thumb = document.getElementById('thumb');
+  const ix = document.getElementById('persona_x');
+  const iy = document.getElementById('persona_y');
+
+  const size = 220;         // taille en px du carré (CSS ci-dessous aussi)
+  const radius = (size/2);  // demi-côté
+
+  let dragging = false;
+
+  function setThumbFromEvent(ev){
+    const rect = joy.getBoundingClientRect();
+    let x = (ev.clientX ?? (ev.touches && ev.touches[0].clientX)) - rect.left;
+    let y = (ev.clientY ?? (ev.touches && ev.touches[0].clientY)) - rect.top;
+
+    // clamp dans le carré
+    x = Math.max(0, Math.min(size, x));
+    y = Math.max(0, Math.min(size, y));
+
+    // centre -> -1..+1
+    const nx = (x - radius) / radius; // gauche -1, droite +1
+    const ny = (radius - y) / radius; // haut +1, bas -1  (on inversera pour correspondre à la consigne)
+    // conversion demandée: haut=chaleureuse => y positif; bas=précise => y négatif
+    ix.value = nx.toFixed(2);
+    iy.value = ny.toFixed(2);
+
+    thumb.style.left = (x - 10) + 'px';
+    thumb.style.top  = (y - 10) + 'px';
   }
-  setTimeout(()=>{ const r=axes.getBoundingClientRect(); setDotAt(r.left+r.width/2, r.top+r.height/2); },0);
-  axes.addEventListener('pointerdown', e=>{
-    setDotAt(e.clientX, e.clientY);
-    const move=ev=>setDotAt(ev.clientX, ev.clientY);
-    const up=()=>{window.removeEventListener('pointermove',move);window.removeEventListener('pointerup',up);}
-    window.addEventListener('pointermove',move); window.addEventListener('pointerup',up);
-  });
+
+  function startDrag(ev){ dragging = true; setThumbFromEvent(ev); }
+  function moveDrag(ev){ if(dragging){ ev.preventDefault(); setThumbFromEvent(ev); } }
+  function endDrag(){ dragging = false; }
+
+  joy.addEventListener('mousedown', startDrag);
+  joy.addEventListener('mousemove', moveDrag);
+  window.addEventListener('mouseup', endDrag);
+
+  joy.addEventListener('touchstart', startDrag, {passive:false});
+  joy.addEventListener('touchmove',  moveDrag,  {passive:false});
+  window.addEventListener('touchend', endDrag);
+
+  // position initiale au centre
+  thumb.style.left = (radius - 10) + 'px';
+  thumb.style.top  = (radius - 10) + 'px';
 </script>
+
 {% endblock %}
