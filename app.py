@@ -3,29 +3,32 @@ import os, yaml, requests
 
 app = Flask(__name__)
 
-# --- Configuration ---
+# --- Config LLM ---
 TOGETHER_API_URL = "https://api.together.xyz/v1/chat/completions"
 TOGETHER_API_KEY = os.getenv("TOGETHER_API_KEY") or "TA_CLE_API_ICI"
 
-# Simulation d'une base de données minimale (à remplacer par une vraie table)
+# --- Helper: URL absolue vers /static ---
+def static_url(filename: str) -> str:
+    # _external=True => URL absolue, nécessaire pour l'embed côté client
+    return url_for("static", filename=filename, _external=True)
+
+# --- "Mini-DB" : avatars directement dans /static/
+#    -> place tes fichiers : /static/avocat.png, /static/immo.png, /static/medecin.png
 BOTS = {
-    "avocat-001": {"pack": "avocat", "name": "Betty (Avocat)", "color": "#4F46E5", "avatar": "/static/img/avocat.png"},
-    "immo-002": {"pack": "immo", "name": "Betty (Immobilier)", "color": "#16A34A", "avatar": "/static/img/immo.png"},
-    "medecin-003": {"pack": "medecin", "name": "Betty (Médecin)", "color": "#0284C7", "avatar": "/static/img/medecin.png"},
+    "avocat-001":  {"pack": "avocat",  "name": "Betty (Avocat)",   "color": "#4F46E5", "avatar_file": "avocat.png"},
+    "immo-002":    {"pack": "immo",    "name": "Betty (Immobilier)","color": "#16A34A", "avatar_file": "immo.png"},
+    "medecin-003": {"pack": "medecin", "name": "Betty (Médecin)",  "color": "#0284C7", "avatar_file": "medecin.png"},
 }
 
-
-# --- Fonctions utilitaires ---
+# --- Utils ---
 def load_pack_prompt(pack_name):
-    pack_path = f"data/packs/{pack_name}.yaml"
-    if not os.path.exists(pack_path):
+    path = f"data/packs/{pack_name}.yaml"
+    if not os.path.exists(path):
         return "Tu es une assistante AI professionnelle. Réponds avec clarté et concision."
-    with open(pack_path, "r") as f:
+    with open(path, "r") as f:
         return yaml.safe_load(f).get("prompt", "")
 
-
 def query_llm(user_input, pack_name):
-    """Appel API Together pour générer une réponse LLM."""
     prompt = load_pack_prompt(pack_name)
     headers = {"Authorization": f"Bearer {TOGETHER_API_KEY}", "Content-Type": "application/json"}
     data = {
@@ -44,9 +47,7 @@ def query_llm(user_input, pack_name):
         print("[LLM ERROR]", e)
         return "Désolé, une erreur est survenue lors de la génération de la réponse."
 
-
-# --- Routes principales (pages HTML) ---
-
+# --- Pages ---
 @app.route("/")
 def index():
     return render_template("index.html")
@@ -54,10 +55,9 @@ def index():
 @app.route("/config", methods=["GET", "POST"])
 def config_page():
     if request.method == "POST":
-        # Sauvegarde temporaire dans la session (ou DB plus tard)
         pack = request.form.get("pack")
         color = request.form.get("color")
-        avatar = request.form.get("avatar")
+        avatar = request.form.get("avatar")  # si tu proposes un select d’avatars
         return redirect(url_for("inscription_page", pack=pack, color=color, avatar=avatar))
     return render_template("config.html")
 
@@ -68,7 +68,6 @@ def inscription_page():
         pack = request.args.get("pack")
         color = request.args.get("color")
         avatar = request.args.get("avatar")
-        # Ici tu pourrais envoyer un mail à ton Gmail / ajouter en DB
         print(f"[NEW SUBSCRIBER] {email} -> {pack}")
         return redirect(url_for("recap_page", pack=pack))
     return render_template("inscription.html")
@@ -78,9 +77,7 @@ def recap_page():
     pack = request.args.get("pack", "avocat")
     return render_template("recap.html", pack=pack)
 
-
-# --- Routes API (AJAX) ---
-
+# --- API ---
 @app.route("/api/bettybot", methods=["POST"])
 def bettybot_reply():
     data = request.get_json()
@@ -93,20 +90,21 @@ def bettybot_reply():
     response = query_llm(user_input, pack)
     return jsonify({"response": response})
 
-
 @app.route("/api/bot_meta")
 def bot_meta():
     bot_id = request.args.get("bot_id", "avocat-001")
     bot = BOTS.get(bot_id)
     if not bot:
         return jsonify({"error": "bot inconnu"}), 404
+
+    # avatar_file est dans /static/ ; on renvoie l’URL absolue
+    avatar_url = static_url(bot["avatar_file"])
     return jsonify({
         "name": bot["name"],
-        "avatar_url": bot["avatar"],
+        "avatar_url": avatar_url,
         "color_hex": bot["color"]
     })
 
-
-# --- Lancement ---
+# --- Run ---
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000, debug=True)
