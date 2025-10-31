@@ -122,4 +122,12 @@ input,textarea,select{background:#0b0f14;border:1px solid var(--border);border-r
 .chat-frame{width:420px;height:560px;border:0;border-radius:16px;box-shadow:0 10px 40px rgba(0,0,0,.35);background:#0b0f14}
 @media (max-width:900px){.avatar-grid{grid-template-columns:1fr 1fr}.swatches{grid-template-columns:repeat(6,28px)}.chat-frame{width:100%;max-width:420px}}
 
+.hero-cta{display:flex;gap:12px;justify-content:center;margin:18px 0 10px}
+.trust{display:flex;gap:18px;justify-content:center;flex-wrap:wrap;margin:10px 0 4px;color:var(--muted);font-size:.95rem}
+.features{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin:18px 0 8px}
+.feature{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:16px;text-align:left}
+.feature h3{margin:0 0 6px;font-size:1.05rem}
+@media (max-width:900px){.features{grid-template-columns:1fr}}
+
+
 
