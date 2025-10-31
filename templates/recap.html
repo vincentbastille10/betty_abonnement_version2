@@ -61,7 +61,6 @@
     </div>
 
     <div class="grid">
-      <!-- GAUCHE : infos + code -->
       <section class="card">
         <div class="title">
           <h2>Code d'intégration</h2>
@@ -82,11 +81,8 @@
         <label for="code">Collez ce code juste avant <code>&lt;/body&gt;</code> de votre site</label>
         <div class="codebox">
           <textarea id="code" class="code" readonly></textarea>
-          <div class="copyBar">
-            <button class="btn primary" id="copy">Copier</button>
-          </div>
+          <div class="copyBar"><button class="btn primary" id="copy">Copier</button></div>
         </div>
-
         <p class="small" id="helper">
           Votre script charge le widget depuis
           <code>{{ (base_url or BASE_URL) }}</code> et référence votre identifiant public.
@@ -94,66 +90,72 @@
         </p>
       </section>
 
-      <!-- DROITE : Prévisualisation auto -->
       <aside class="card">
         <div class="title"><h2>Aperçu</h2><span class="sub">Simulation embarquée</span></div>
-        <div class="previewWrap">
-          <iframe id="live" title="Aperçu du bot"></iframe>
-        </div>
+        <div class="previewWrap"><iframe id="live" title="Aperçu du bot"></iframe></div>
       </aside>
     </div>
   </div>
 
   <script>
-    (function(){
-      // Données sécurisées depuis Jinja
-      const cfg = {
-        base: {{ (base_url or BASE_URL)|tojson }},
-        id: {{ (public_id or "")|tojson }},
-        name: {{ (full_name or "")|tojson }}
-      };
-      cfg.base = (cfg.base || "").replace(/\/$/, "");
+  document.addEventListener('DOMContentLoaded', function () {
+    // Données injectées côté serveur
+    const cfg = {
+      base: {{ (base_url or BASE_URL)|tojson }},
+      id:   {{ (public_id or "")|tojson }},
+      name: {{ (full_name or "")|tojson }}
+    };
+    cfg.base = (cfg.base || '').replace(/\/$/, '');
+    const safeName = String(cfg.name || '').replace(/"/g, '&quot;');
+    const END = '<\\/script>'; // ← IMPORTANT : jamais </script> en clair !
 
-      const code = cfg.id
-        ? `<!-- Betty Bots — propulsé par Spectra Media AI -->\n` +
-          `<script async id="betty-widget"\n` +
-          `  src="${cfg.base}/static/widget.js"\n` +
-          `  data-public-id="${cfg.id}"\n` +
-          `  data-bot-name="${cfg.name.replace(/"/g,'&quot;')}">` + `</script>`
-        : `<!-- Identifiant public manquant : revenez via la page d’inscription ou appelez cette page avec ?public_id=VOTRE_ID&owner=Nom -->`;
+    // Génère le code d'intégration (sécurisé)
+    let code;
+    if (cfg.id) {
+      code  = '<!-- Betty Bots — propulsé par Spectra Media AI -->\\n';
+      code += '<script async id="betty-widget"\\n';
+      code += '  src="' + cfg.base + '/static/widget.js"\\n';
+      code += '  data-public-id="' + cfg.id + '"\\n';
+      code += '  data-bot-name="' + safeName + '">' + END;
+    } else {
+      code = '<!-- Identifiant public manquant : revenez via la page d’inscription. -->';
+    }
 
-      // Remplir la zone de code
-      const $code = document.getElementById('code');
-      $code.value = code;
+    // Injecte dans la textarea
+    const $code  = document.getElementById('code');
+    const $copy  = document.getElementById('copy');
+    const $state = document.getElementById('state');
+    const $help  = document.getElementById('helper');
+    $code.value  = code;
 
-      // Copier (désactivé si pas d'ID)
-      const copyBtn = document.getElementById('copy');
-      const state   = document.getElementById('state');
-      const helper  = document.getElementById('helper');
+    if (!cfg.id) {
+      $copy.disabled = true;
+      $copy.style.opacity = 0.6;
+      $help.classList.add('warn');
+      $help.innerHTML = 'Identifiant public manquant. Revenez via le flux d’inscription.';
+    }
 
-      if (!cfg.id) {
-        copyBtn.disabled = true;
-        copyBtn.style.opacity = .6;
-        helper.classList.add('warn');
-        helper.innerHTML = `Identifiant public manquant. Revenez via le flux d’inscription, ou testez avec <code>?public_id=VOTRE_ID&amp;owner=Nom</code>.`;
-      }
+    $copy.addEventListener('click', async () => {
+      try { await navigator.clipboard.writeText($code.value);
+            $state.textContent = '• copié';
+            $state.style.background = 'rgba(16,185,129,.28)';
+      } catch (e) { $code.select(); document.execCommand('copy'); }
+    });
 
-      copyBtn.addEventListener('click', async ()=>{
-        try { await navigator.clipboard.writeText($code.value);
-              state.textContent = '• copié'; state.style.background = 'rgba(16,185,129,.28)';
-        } catch(e) { $code.select(); document.execCommand('copy'); }
-      });
-
-      // Prévisualisation embarquée
-      const previewHtml = `<!doctype html><html><head><meta charset="utf-8">
-        <meta name="viewport" content="width=device-width,initial-scale=1"></head>
-        <body style="margin:0;background:#0b0f1e;height:100vh">${
-          cfg.id
-            ? `<script async id="betty-widget" src="${cfg.base}/static/widget.js" data-public-id="${cfg.id}" data-bot-name="${cfg.name.replace(/"/g,'&quot;')}"></` + `script>`
-            : `<main style="display:grid;place-items:center;height:100%;color:#cbd5e1;font-family:Inter,system-ui">ID manquant — aucune prévisualisation</main>`
-        }</body></html>`;
-      document.getElementById('live').srcdoc = previewHtml;
-    })();
+    // Prévisualisation
+    let html  = '<!doctype html><html><head><meta charset="utf-8">';
+        html += '<meta name="viewport" content="width=device-width,initial-scale=1"></head>';
+        html += '<body style="margin:0;background:#0b0f1e;height:100vh">';
+    if (cfg.id) {
+      html += '<script async id="betty-widget" src="' + cfg.base + '/static/widget.js" ';
+      html += 'data-public-id="' + cfg.id + '" data-bot-name="' + safeName + '">' + END;
+    } else {
+      html += '<main style="display:grid;place-items:center;height:100%;color:#cbd5e1;font-family:Inter,system-ui">';
+      html += 'ID manquant — aucune prévisualisation</main>';
+    }
+    html += '</body></html>';
+    document.getElementById('live').srcdoc = html;
+  });
   </script>
 </body>
 </html>
