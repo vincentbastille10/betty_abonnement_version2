@@ -1,8 +1,9 @@
 # app.py
-from flask import Flask, render_template, request, jsonify, redirect, url_for
-import os, yaml, requests, re, stripe
+from flask import Flask, render_template, request, jsonify, redirect, url_for, session
+import os, yaml, requests, re, stripe, json
 
 app = Flask(__name__)
+app.secret_key = os.getenv("FLASK_SECRET_KEY", "dev-secret-change-me")
 
 # =========================
 # CONFIG (env)
@@ -11,19 +12,19 @@ app = Flask(__name__)
 TOGETHER_API_KEY = os.getenv("TOGETHER_API_KEY", "").strip()
 TOGETHER_API_URL = "https://api.together.xyz/v1/chat/completions"
 # Modèle stable (tu peux surcharger via env LLM_MODEL)
-LLM_MODEL        = os.getenv(
+LLM_MODEL = os.getenv(
     "LLM_MODEL",
     "meta-llama/Meta-Llama-3.1-8B-Instruct-Turbo"
 ).strip()
 # Un peu plus de marge que 90 pour rendre les réponses utiles
-LLM_MAX_TOKENS   = int(os.getenv("LLM_MAX_TOKENS", "180"))
+LLM_MAX_TOKENS = int(os.getenv("LLM_MAX_TOKENS", "180"))
 
 # Stripe
-stripe.api_key   = os.getenv("STRIPE_SECRET_KEY", "").strip()
-PRICE_ID         = os.getenv("STRIPE_PRICE_ID", "").strip()  # abonnement 29,99 €/mois
+stripe.api_key = os.getenv("STRIPE_SECRET_KEY", "").strip()
+PRICE_ID = os.getenv("STRIPE_PRICE_ID", "").strip()  # abonnement 29,99 €/mois
 
 # Base URL (utile pour success/cancel Stripe)
-BASE_URL         = (os.getenv("BASE_URL", "http://127.0.0.1:5000")).rstrip("/")
+BASE_URL = (os.getenv("BASE_URL", "http://127.0.0.1:5000")).rstrip("/")
 
 # =========================
 # HELPERS
@@ -58,16 +59,41 @@ def build_business_block(profile: dict) -> str:
     return "\n".join(lines)
 
 def build_system_prompt(pack_name: str, profile: dict, greeting: str = "") -> str:
+    """
+    Prompt entonnoir + LEAD_JSON.
+    """
     base = load_pack_prompt(pack_name)
     biz  = build_business_block(profile)
-    greet= f"\nMessage d'accueil recommandé : {greeting}\n" if greeting else ""
-    return f"{base}{biz}{greet}"
+
+    guide = f"""
+Tu es **Betty**, assistante {pack_name}. Objectif prioritaire : **QUALIFIER** le prospect puis **proposer un rendez-vous**.
+
+RÈGLES DE CONVERSATION (OBLIGATOIRES) :
+- Pose **UNE seule question** à la fois. 2 phrases max par message.
+- **Pas de répétitions** : n'explique pas à nouveau ce qui vient d'être dit.
+- Oriente la qualification dès les 1ers échanges.
+- Champs à collecter (ordre conseillé) : **motif**, **nom**, **email**, **téléphone**, **disponibilités**.
+- Dès que tu as au moins **motif + nom + (email ou téléphone)**, propose un RDV (créneau ou demande la dispo).
+- Tu ne donnes pas d'avis juridique/médical ; tu orientes vers le pro.
+- Termine souvent par une question **courte** qui fait avancer.
+
+### SORTIE LEAD JSON
+À CHAQUE message, ajoute en **dernière ligne** (sans texte avant/après, sans markdown) un tag :
+<LEAD_JSON>{{"reason": "<motif ou ''>", "name": "<nom ou ''>", "email": "<email ou ''>", "phone": "<téléphone ou ''>", "availability": "<dispo ou ''>", "stage": "<collecting|ready>"}}</LEAD_JSON>
+
+- `stage = "ready"` **uniquement** si tu as **motif + nom + (email ou téléphone)**.
+- Sinon `stage = "collecting"`.
+- Le JSON doit être **une seule ligne** valide. Pas de retour à la ligne, pas de ``` ni autre balise.
+
+Réponds **normalement** au-dessus, puis juste la ligne <LEAD_JSON> à la fin.
+"""
+    greet = f"\nMessage d'accueil recommandé : {greeting}\n" if greeting else ""
+    return f"{base}\n{biz}\n{guide}\n{greet}"
 
 def query_llm(user_input: str, pack_name: str, profile: dict = None, greeting: str = "") -> str:
     """
-    Appel robuste à Together /chat/completions
+    Appel simple (sans historique) à Together /chat/completions
     """
-    # Clé manquante -> message propre (évite la bulle "erreur")
     if not TOGETHER_API_KEY:
         return "⚠️ Clé Together absente côté serveur. Ajoutez TOGETHER_API_KEY dans vos variables d’environnement."
 
@@ -87,7 +113,44 @@ def query_llm(user_input: str, pack_name: str, profile: dict = None, greeting: s
     }
     try:
         r = requests.post(TOGETHER_API_URL, headers=headers, json=payload, timeout=30)
-        # Si Together renvoie une erreur, remonter l’info lisible
+        if not r.ok:
+            try:
+                err = r.json()
+            except Exception:
+                err = {"status": r.status_code, "text": r.text[:200]}
+            return f"⚠️ Erreur Together: {err}"
+        data = r.json()
+        content = (
+            data.get("choices", [{}])[0]
+                .get("message", {})
+                .get("content", "")
+                .strip()
+        )
+        return content or "Désolé, je n’ai pas pu générer de réponse."
+    except Exception as e:
+        print("[LLM ERROR]", type(e).__name__, e)
+        return f"⚠️ Exception serveur: {type(e).__name__}: {e}"
+
+def call_llm_with_history(system_prompt: str, history: list, user_input: str) -> str:
+    """
+    Variante avec historique court (limite les redites).
+    """
+    if not TOGETHER_API_KEY:
+        return "⚠️ Clé Together absente côté serveur. Ajoutez TOGETHER_API_KEY."
+    headers = {"Authorization": f"Bearer {TOGETHER_API_KEY}", "Content-Type": "application/json"}
+
+    messages = [{"role": "system", "content": system_prompt}]
+    messages.extend(history or [])
+    messages.append({"role": "user", "content": user_input})
+
+    payload = {
+        "model": LLM_MODEL,
+        "max_tokens": LLM_MAX_TOKENS,
+        "temperature": 0.4,
+        "messages": messages
+    }
+    try:
+        r = requests.post(TOGETHER_API_URL, headers=headers, json=payload, timeout=30)
         if not r.ok:
             try:
                 err = r.json()
@@ -118,13 +181,39 @@ def parse_contact_info(text: str) -> dict:
     m = re.search(r'(nom|cabinet|agence)\s*:\s*(.+)', text, re.I);  d["name"]    = m.group(2).strip() if m else None
     return {k: v for k, v in d.items() if v}
 
+LEAD_TAG_RE = re.compile(r"<LEAD_JSON>(\{.*?\})</LEAD_JSON>$")
+
+def extract_lead_json(text: str):
+    """
+    Extrait et retire la ligne LEAD_JSON de la réponse.
+    Retourne (message_sans_tag, lead_dict_ou_None)
+    """
+    if not text:
+        return text, None
+    m = LEAD_TAG_RE.search(text)
+    if not m:
+        return text, None
+    lead_raw = m.group(1)
+    message = text[:m.start()].rstrip()
+    try:
+        lead = json.loads(lead_raw)
+    except Exception:
+        lead = None
+    return message, lead
+
+def send_lead_email(to_email: str, lead: dict, bot_name: str = "Betty Bot"):
+    """
+    Stub d'envoi email lead (à implémenter en prod : SMTP / Mailjet / SendGrid).
+    """
+    print("[LEAD] Envoi (demo) à", to_email, "lead=", lead, "via", bot_name)
+
 # =========================
 # MINI-DB (démo)
 # =========================
 BOTS = {
-    "avocat-001":  {"pack": "avocat",  "name": "Betty (Avocat)",     "color": "#4F46E5", "avatar_file": "avocat.jpg",  "profile": {}, "greeting": ""},
-    "immo-002":    {"pack": "immo",    "name": "Betty (Immobilier)", "color": "#16A34A", "avatar_file": "immo.jpg",    "profile": {}, "greeting": ""},
-    "medecin-003": {"pack": "medecin", "name": "Betty (Médecin)",    "color": "#0284C7", "avatar_file": "medecin.jpg", "profile": {}, "greeting": ""},
+    "avocat-001":  {"pack": "avocat",  "name": "Betty (Avocat)",     "color": "#4F46E5", "avatar_file": "avocat.jpg",  "profile": {}, "greeting": "", "buyer_email": None},
+    "immo-002":    {"pack": "immo",    "name": "Betty (Immobilier)", "color": "#16A34A", "avatar_file": "immo.jpg",    "profile": {}, "greeting": "", "buyer_email": None},
+    "medecin-003": {"pack": "medecin", "name": "Betty (Médecin)",    "color": "#0284C7", "avatar_file": "medecin.jpg", "profile": {}, "greeting": "", "buyer_email": None},
 }
 
 # =========================
@@ -169,12 +258,14 @@ def inscription_page():
         BOTS[bot_id]["greeting"] = greet
         BOTS[bot_id]["color"]    = color
         BOTS[bot_id]["avatar_file"] = avatar
+        # En prod, on associerait l'email acheteur au bot créé
+        BOTS[bot_id]["buyer_email"] = email
 
         # Stripe : si clés/price manquent en dev, on simule un succès propre
         if not stripe.api_key or not PRICE_ID:
             return redirect(f"{BASE_URL}/recap?pack={pack}&session_id=fake_checkout_dev", code=303)
 
-        session = stripe.checkout.Session.create(
+        session_obj = stripe.checkout.Session.create(
             mode="subscription",
             line_items=[{"price": PRICE_ID, "quantity": 1}],
             customer_email=email,
@@ -186,7 +277,7 @@ def inscription_page():
                 "persona_x": px, "persona_y": py
             }
         )
-        return redirect(session.url, code=303)
+        return redirect(session_obj.url, code=303)
     return render_template("inscription.html", title="Inscription")
 
 @app.route("/recap")
@@ -212,13 +303,33 @@ def bettybot_reply():
         return jsonify({"response": "Dites-moi ce dont vous avez besoin 🙂"}), 200
 
     bot = BOTS.get(bot_id, BOTS["avocat-001"])
-    answer = query_llm(
-        user_input,
-        bot["pack"],
-        profile=bot.get("profile", {}),
-        greeting=bot.get("greeting", "")
-    )
-    return jsonify({"response": answer})
+
+    # --- mémoire courte pour limiter les redites ---
+    key = f"conv_{bot_id}"
+    history = session.get(key, [])
+    history = history[-6:]  # 3 tours précédents max
+
+    # prompt avec entonnoir + LEAD_JSON
+    system_prompt = build_system_prompt(bot["pack"], bot.get("profile", {}), bot.get("greeting", ""))
+
+    # appel LLM
+    full_text = call_llm_with_history(system_prompt=system_prompt, history=history, user_input=user_input)
+
+    # on coupe la ligne LEAD_JSON et on récupère le lead
+    response_text, lead = extract_lead_json(full_text)
+
+    # MAJ mémoire
+    history.append({"role": "user", "content": user_input})
+    history.append({"role": "assistant", "content": response_text})
+    session[key] = history
+
+    # si lead prêt et email acheteur connu -> stub d'envoi
+    if lead and isinstance(lead, dict) and lead.get("stage") == "ready":
+        buyer_email = bot.get("buyer_email")  # à fiabiliser en prod via webhook Stripe
+        if buyer_email:
+            send_lead_email(buyer_email, lead, bot_name=bot["name"])
+
+    return jsonify({"response": response_text})
 
 @app.route("/api/bot_meta")
 def bot_meta():
@@ -234,10 +345,17 @@ def bot_meta():
         "greeting": bot.get("greeting", "")
     })
 
-# Petit endpoint santé (utile pour Vercel)
+# Endpoint santé (utile pour Vercel)
 @app.route("/healthz")
 def healthz():
     return "ok", 200
+
+# Reset conversation (démo)
+@app.route("/api/reset", methods=["POST"])
+def reset_conv():
+    bot_id = (request.get_json(silent=True) or {}).get("bot_id", "avocat-001")
+    session.pop(f"conv_{bot_id}", None)
+    return jsonify({"ok": True})
 
 # =========================
 # RUN (local)
