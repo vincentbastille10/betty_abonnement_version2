@@ -148,3 +148,11 @@ a{color:inherit;text-decoration:none}
   .cfg-grid{grid-template-columns:1fr}
   .avatar-grid{grid-template-columns:repeat(2,1fr)}
 }
+
+/* Typing indicator */
+.bubble.typing{background:#111827;border:1px solid var(--border);color:var(--muted)}
+.bubble.typing .label{font-weight:600;margin-right:6px}
+.bubble.typing .dots i{display:inline-block;width:4px;margin-left:3px;opacity:.15;animation:bettyblink 1.2s infinite}
+.bubble.typing .dots i:nth-child(2){animation-delay:.2s}
+.bubble.typing .dots i:nth-child(3){animation-delay:.4s}
+@keyframes bettyblink{0%,20%{opacity:.15}50%{opacity:.9}100%{opacity:.15}}
