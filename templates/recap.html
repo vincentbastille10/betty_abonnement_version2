@@ -9,42 +9,33 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700;800&display=swap" rel="stylesheet">
   <style>
     :root{--bg1:#0f1020;--bg2:#0b0c1a;--panel:#12142a;--muted:#a6b0c2;--text:#f8f9fc;--brand1:#4f46e5;--brand2:#7c3aed;--ok:#10b981}
-    *{box-sizing:border-box}
-    html,body{height:100%}
+    *{box-sizing:border-box} html,body{height:100%}
     body{margin:0;font-family:Inter,system-ui,Segoe UI,Roboto,Arial,sans-serif;color:var(--text);
       background: radial-gradient(1000px 700px at 10% -10%, rgba(79,70,229,.18), transparent 60%),
                   radial-gradient(900px 600px at 100% 0%, rgba(124,58,237,.14), transparent 60%),
-                  linear-gradient(180deg,var(--bg1),var(--bg2));
-      padding:28px}
+                  linear-gradient(180deg,var(--bg1),var(--bg2)); padding:28px}
     .wrap{max-width:1200px;margin:0 auto}
     .head{display:flex;align-items:center;gap:14px;margin-bottom:18px}
     .logo{width:48px;height:48px;border-radius:12px;display:grid;place-items:center;background:linear-gradient(135deg,var(--brand1),var(--brand2));box-shadow:0 10px 30px rgba(79,70,229,.35)}
     .logo svg{width:28px;height:28px}
     h1{margin:0;font-size:clamp(22px,3vw,28px);font-weight:800;letter-spacing:.2px}
     .sub{margin:0;color:var(--muted);font-size:13px}
-
     .grid{display:grid;grid-template-columns:1.1fr .9fr;gap:22px}
     @media (max-width: 980px){.grid{grid-template-columns:1fr}}
-
     .card{background:rgba(18,20,42,.76);border:1px solid rgba(255,255,255,.06);border-radius:16px;padding:20px;box-shadow:0 16px 60px rgba(0,0,0,.35), inset 0 1px 0 rgba(255,255,255,.03)}
     .title{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
     .title h2{margin:0;font-size:16px;font-weight:700}
     .badge{display:inline-flex;gap:8px;align-items:center;font-size:12px;background:rgba(16,185,129,.18);color:#b6f1da;border:1px solid rgba(16,185,129,.35);padding:6px 10px;border-radius:999px}
-
     .row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
     @media (max-width:640px){.row{grid-template-columns:1fr}}
-
     label{display:block;font-size:12px;color:#cdd4e5;margin:12px 0 6px}
-    input,select{width:100%;padding:12px 14px;border-radius:12px;border:1px solid rgba(255,255,255,.08);background:rgba(7,9,22,.65);color:var(--text);outline:none}
-    input:focus,select:focus{box-shadow:0 0 0 2px rgba(79,70,229,.35), 0 8px 24px rgba(79,70,229,.25);border-color:transparent}
-
+    input{width:100%;padding:12px 14px;border-radius:12px;border:1px solid rgba(255,255,255,.08);background:rgba(7,9,22,.65);color:var(--text);outline:none}
+    input[readonly]{opacity:.85}
     .codebox{position:relative}
-    textarea.code{width:100%;min-height:210px;max-height:340px;padding:14px 14px 46px;border-radius:14px;border:1px solid rgba(255,255,255,.08);background:linear-gradient(180deg,rgba(9,12,24,.88),rgba(7,9,18,.9));color:#e5e7eb;font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,"Liberation Mono",monospace;font-size:12.5px;line-height:1.5;resize:vertical;overflow:auto;white-space:pre}
+    textarea.code{width:100%;min-height:210px;max-height:340px;padding:14px 14px 46px;border-radius:14px;border:1px solid rgba(255,255,255,.08);background:linear-gradient(180deg,rgba(9,12,24,.88),rgba(7,9,18,.9));color:#e5e7eb;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12.5px;line-height:1.5;resize:vertical;overflow:auto;white-space:pre}
     .copyBar{position:absolute;right:8px;bottom:8px;display:flex;gap:8px}
-    .btn{appearance:none;border:none;padding:11px 14px;border-radius:12px;font-weight:700;cursor:pointer;transition:.2s ease}
+    .btn{appearance:none;border:none;padding:11px 14px;border-radius:12px;font-weight:700;cursor:pointer;transition:.2s}
     .btn.primary{background:linear-gradient(135deg,var(--brand1),var(--brand2));color:#fff;box-shadow:0 0 0 2px rgba(79,70,229,.35), 0 10px 30px rgba(79,70,229,.25)}
-    .btn.ghost{background:rgba(255,255,255,.06);color:#e5e7eb;border:1px solid rgba(255,255,255,.08)}
-
     .previewWrap{background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.06);border-radius:16px;padding:14px}
     iframe{width:100%;height:540px;border:0;border-radius:12px;background:#0b0f1e}
     .small{font-size:12px;color:#aab1c2}
@@ -69,7 +60,7 @@
     </div>
 
     <div class="grid">
-      <!-- GAUCHE: Form + Code -->
+      <!-- GAUCHE : infos + code -->
       <section class="card">
         <div class="title">
           <h2>Code d'intégration</h2>
@@ -78,87 +69,70 @@
 
         <div class="row">
           <div>
-            <label for="botName">Nom complet du bot</label>
-            <input id="botName" placeholder="ex. Betty Bot — Avocat Paris">
+            <label>Nom complet du bot</label>
+            <input id="botName" value="{{ full_name or '' }}" readonly>
           </div>
           <div>
-            <label for="botId">Identifiant unique</label>
-            <input id="botId" placeholder="ex. betty_7f2k9p">
+            <label>Identifiant unique</label>
+            <input id="botId" value="{{ public_id or '' }}" readonly>
           </div>
         </div>
-        
-        <div class="row">
-          <div>
-            <label for="color">Couleur hex</label>
-            <input id="color" placeholder="#4F46E5">
-          </div>
-          <div>
-            <label for="size">Taille du widget</label>
-            <select id="size">
-              <option value="s">Small</option>
-              <option value="m" selected>Medium</option>
-              <option value="l">Large</option>
-            </select>
-          </div>
-        </div>
-
-        <label for="base">BASE_URL (optionnel)</label>
-        <input id="base" placeholder="https://betty-abonnement-version2.vercel.app">
 
         <label for="code">Collez ce code juste avant <code>&lt;/body&gt;</code> de votre site</label>
         <div class="codebox">
           <textarea id="code" class="code" readonly></textarea>
           <div class="copyBar">
-            <button class="btn ghost" id="open">Aperçu</button>
             <button class="btn primary" id="copy">Copier</button>
           </div>
         </div>
-        <p class="small">Astuce : vous pouvez appeler cette page avec des paramètres d’URL pour préremplir automatiquement (ex. <code>?bot_id=betty_abc123&bot_name=Studio%20Lex&color=%234F46E5&size=m&base=https://betty-abonnement-version2.vercel.app</code>).</p>
+        <p class="small">Votre script charge le widget depuis <code>{{ base_url }}</code> et référence votre identifiant public. Aucune autre configuration n’est nécessaire.</p>
       </section>
 
-      <!-- DROITE: Aperçu -->
+      <!-- DROITE : Prévisualisation auto -->
       <aside class="card">
         <div class="title"><h2>Aperçu</h2><span class="sub">Simulation embarquée</span></div>
         <div class="previewWrap">
-          <iframe id="live" title="Aperçu du bot" srcdoc="<html><body style='margin:0;background:#0b0f1e;color:#cbd5e1;font-family:Inter,system-ui,sans-serif;display:grid;place-items:center;height:100%'><main style='text-align:center'><h3 style='margin:0 0 6px'>Prévisualisation</h3><p style='margin:0 0 14px;font-size:14px;opacity:.8'>Le widget se chargera ici.</p><div style='display:inline-block;padding:8px 12px;border-radius:10px;border:1px solid rgba(255,255,255,.12);opacity:.6'>En attente du script…</div></main></body></html>"></iframe>
+          <iframe id="live" title="Aperçu du bot"></iframe>
         </div>
       </aside>
     </div>
   </div>
 
   <script>
-    const $ = (id)=>document.getElementById(id);
-    const el = {name:$('botName'), id:$('botId'), color:$('color'), size:$('size'), base:$('base'), code:$('code'), copy:$('copy'), open:$('open'), state:$('state'), live:$('live')};
+    (function(){
+      const base = "{{ base_url }}".replace(/\/$/, "");
+      const id   = "{{ public_id or '' }}";
+      const name = "{{ (full_name or '').replace('"','&quot;') }}";
 
-    // 1) Récupération des paramètres d’URL pour rendre la page statique mais personnalisable par client
-    const params = new URLSearchParams(location.search);
-    el.name.value  = params.get('bot_name') || 'Mon Betty Bot';
-    el.id.value    = params.get('bot_id')   || 'betty_xxxxxx';
-    el.color.value = params.get('color')    || '#4F46E5';
-    el.size.value  = params.get('size')     || 'm';
-    el.base.value  = params.get('base')     || 'https://betty-abonnement-version2.vercel.app';
+      // Code à copier: minimal, propre
+      const code = [
+        "<!-- Betty Bots — propulsé par Spectra Media AI -->",
+        `<script async id="betty-widget" src="${base}/static/widget.js" data-public-id="${id}" data-bot-name="${name}"></`+"script>"
+      ].join("\n");
 
-    function build(){
-      const url = (el.base.value || '').replace(/\/$/, '');
-      const code = `<!-- Betty Bots — propulsé par Spectra Media AI -->\n<link rel=\"preconnect\" href=\"${url}\">\n<script\n  async\n  id=\"betty-widget\"\n  src=\"${url}/static/widget.js\"\n  data-bot-id=\"${el.id.value}\"\n  data-bot-name=\"${el.name.value.replace(/\"/g,'\\\"')}\"\n  data-color=\"${el.color.value}\"\n  data-size=\"${el.size.value}\"\n></script>`;
-      el.code.value = code;
-      el.state.textContent = '• prêt à copier';
-    }
+      const $code = document.getElementById('code');
+      $code.value = code;
 
-    ['input','change'].forEach(evt=>{
-      [el.name, el.id, el.color, el.size, el.base].forEach(x=> x.addEventListener(evt, build));
-    });
-    build();
+      // Copie
+      document.getElementById('copy').addEventListener('click', async ()=>{
+        try{
+          await navigator.clipboard.writeText(code);
+          const s = document.getElementById('state');
+          s.textContent = "• copié";
+          s.style.background = "rgba(16,185,129,.28)";
+        }catch(e){
+          $code.select(); document.execCommand('copy');
+        }
+      });
 
-    el.copy.addEventListener('click', async ()=>{
-      try{ await navigator.clipboard.writeText(el.code.value); el.copy.textContent='Copié !'; el.copy.style.background='linear-gradient(135deg,var(--ok),#1dd1a1)'; setTimeout(()=>{ el.copy.textContent='Copier'; el.copy.style.background=''; },1300);}catch(e){ el.code.select(); document.execCommand('copy'); }
-    });
-
-    el.open.addEventListener('click', ()=>{
-      const url = (el.base.value || '').replace(/\/$/, '');
-      const html = `<!doctype html><html><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"></head><body style=\"margin:0;background:#0b0f1e;height:100vh\">\n<script async id=\"betty-widget\" src=\"${url}/static/widget.js\" data-bot-id=\"${el.id.value}\" data-bot-name=\"${el.name.value.replace(/\"/g,'\\\"')}\" data-color=\"${el.color.value}\" data-size=\"${el.size.value}\"></script>\n</body></html>`;
-      el.live.srcdoc = html;
-    });
+      // Prévisualisation auto
+      const html = `<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
+<body style="margin:0;background:#0b0f1e;height:100vh">
+<script async id="betty-widget" src="${base}/static/widget.js" data-public-id="${id}" data-bot-name="${name}"></`+"script>
+</body></html>`;
+      document.getElementById('live').srcdoc = html;
+    })();
   </script>
 </body>
 </html>
