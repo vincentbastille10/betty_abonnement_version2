@@ -1,12 +1,18 @@
 {% extends "base.html" %}
 {% block content %}
 <h1>Abonnement validé ✅</h1>
-<p>Merci ! Voici votre script à coller sur votre site :</p>
 
-<textarea class="code" rows="6" readonly>
+{% if request.args.get('session_id') %}
+<p>Paiement confirmé. Merci d’avoir choisi <strong>Betty Bot</strong> !</p>
+{% endif %}
+
+<p>Voici le code à copier sur votre site pour activer votre bot :</p>
+
+<textarea readonly class="code-block" rows="6">
 <script src="{{ request.host_url.rstrip('/') }}/static/js/embed.js?bot_id={{ 'avocat-001' if pack=='avocat' else ('medecin-003' if pack=='medecin' else 'immo-002') }}"></script>
 </textarea>
 
-<p>Besoin d’aide ? Contactez-nous.</p>
-<a class="btn" href="{{ url_for('index') }}">Retour à l’accueil</a>
+<p class="hint">Collez ce script dans votre page web, avant la balise <code>&lt;/body&gt;</code>.</p>
+
+<a href="{{ url_for('index') }}" class="btn">Retour à l’accueil</a>
 {% endblock %}
