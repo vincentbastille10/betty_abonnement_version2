@@ -1,11 +1,12 @@
 {% extends "base.html" %}
 {% block content %}
-  <h2>Abonnement validé ✅</h2>
-  {% if script_snippet %}
-    <p>Collez ce script juste avant </body> sur votre site :</p>
-    <pre>{{ script_snippet }}</pre>
-  {% else %}
-    <p>Paiement non confirmé encore. Rafraîchissez dans quelques secondes.</p>
-  {% endif %}
-  <a class="btn" href="/">Retour</a>
+<h1>Abonnement validé ✅</h1>
+<p>Merci ! Voici votre script à coller sur votre site :</p>
+
+<textarea class="code" rows="6" readonly>
+<script src="{{ request.host_url.rstrip('/') }}/static/js/embed.js?bot_id={{ 'avocat-001' if pack=='avocat' else ('medecin-003' if pack=='medecin' else 'immo-002') }}"></script>
+</textarea>
+
+<p>Besoin d’aide ? Contactez-nous.</p>
+<a class="btn" href="{{ url_for('index') }}">Retour à l’accueil</a>
 {% endblock %}
