@@ -3,8 +3,8 @@
 
 <h1>Découvrez Betty Bot</h1>
 <p class="intro">
-  Le chatbot métier qui <strong>qualifie vos leads 24/7</strong> et répond avec une <strong>IA spécialisée</strong>.
-  Intégration en <strong>2 minutes</strong> sur votre site. Gagnez du temps, ne ratez plus aucune opportunité.
+  Le chatbot métier qui <strong>qualifie vos leads 24/7</strong> avec une <strong>IA spécialisée</strong>.
+  Intégration en <strong>2 minutes</strong> sur votre site. Gagnez du temps, ne ratez plus d’opportunités.
 </p>
 
 <div class="hero-cta">
@@ -14,26 +14,128 @@
 
 <!-- Bandeau de confiance -->
 <div class="trust">
-  <div>✅ Paiement sécurisé Stripe</div>
-  <div>✅ Données traitées en toute confidentialité</div>
-  <div>✅ Résiliation possible à tout moment</div>
+  <div>✓ Paiement sécurisé Stripe</div>
+  <div>✓ Données traitées en toute confidentialité</div>
+  <div>✓ Résiliation possible à tout moment</div>
+</div>
+
+<!-- Logos (optionnels) -->
+<div class="logos">
+  <span class="logos-label">Déjà utilisé par&nbsp;</span>
+  <img src="{{ url_for('static', filename='logo-avocat.jpg') }}" onerror="this.style.display='none'">
+  <img src="{{ url_for('static', filename='logo-medecin.jpg') }}" onerror="this.style.display='none'">
+  <img src="{{ url_for('static', filename='logo-immo.jpg') }}" onerror="this.style.display='none'">
 </div>
 
 <!-- Points clés -->
 <div class="features">
   <div class="feature">
     <h3>Qualification automatique</h3>
-    <p>Nom, email, téléphone, motif de contact… Betty collecte l’essentiel sans friction et vous envoie des prospects prêts à rappeler.</p>
+    <p>Nom, email, téléphone, motif… Betty collecte l’essentiel sans friction et vous envoie des prospects prêts à rappeler.</p>
   </div>
   <div class="feature">
     <h3>IA métier</h3>
-    <p>Réponses adaptées à votre activité (avocat, médecin, immobilier, notaire) avec un ton personnalisable pour coller à votre image.</p>
+    <p>Réponses adaptées à votre activité (avocat, médecin, immobilier, notaire), ton personnalisable à votre image.</p>
   </div>
   <div class="feature">
     <h3>Plug &amp; play</h3>
     <p>Un simple script à copier. Couleur, avatar, message d’accueil, coordonnées : tout se règle en quelques clics.</p>
   </div>
 </div>
+
+<!-- Bandeau métriques -->
+<div class="metrics">
+  <div class="metric">
+    <div class="m-num">+120</div>
+    <div class="m-label">conversations qualifiées / mois</div>
+  </div>
+  <div class="metric">
+    <div class="m-num">-35%</div>
+    <div class="m-label">de temps passé au téléphone</div>
+  </div>
+  <div class="metric">
+    <div class="m-num">4,8★</div>
+    <div class="m-label">satisfaction moyenne des visiteurs</div>
+  </div>
+</div>
+
+<!-- Témoignages -->
+<div class="testimonials">
+  <div class="t-card">
+    <div class="t-stars">★★★★★</div>
+    <p class="t-quote">“Betty filtre les demandes et prépare nos dossiers. On gagne un temps fou et on rappelle seulement les vrais prospects.”</p>
+    <div class="t-author">
+      <img src="{{ url_for('static', filename='logo-avocat.jpg') }}" onerror="this.style.display='none'">
+      <div>
+        <div class="t-name">Me Lefèvre</div>
+        <div class="t-role">Cabinet d’avocats – Le Mans</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="t-card">
+    <div class="t-stars">★★★★★</div>
+    <p class="t-quote">“En 2 minutes c’était en ligne. Les patients la trouvent claire, et nous recevons des demandes déjà qualifiées.”</p>
+    <div class="t-author">
+      <img src="{{ url_for('static', filename='logo-medecin.jpg') }}" onerror="this.style.display='none'">
+      <div>
+        <div class="t-name">Dr Martin</div>
+        <div class="t-role">Cabinet médical – Sarthe</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="t-card">
+    <div class="t-stars">★★★★☆</div>
+    <p class="t-quote">“Leads plus précis, moins d’allers-retours. Les visites s’enchaînent mieux et ça se voit sur le chiffre.”</p>
+    <div class="t-author">
+      <img src="{{ url_for('static', filename='logo-immo.jpg') }}" onerror="this.style.display='none'">
+      <div>
+        <div class="t-name">R. Dubois</div>
+        <div class="t-role">Agence immobilière – Pays de la Loire</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Badge Trustpilot -->
+<div class="trustpilot">
+  <a href="#" rel="nofollow noopener">
+    <img src="{{ url_for('static', filename='trustpilot-badge.png') }}" alt="Trustpilot" onerror="this.style.display='none'">
+    <span>Notes et avis vérifiés sur Trustpilot</span>
+  </a>
+</div>
+
+<!-- FAQ -->
+<section class="faq">
+  <h2>FAQ</h2>
+  <div class="faq-list">
+    <details>
+      <summary>Quel est le prix et l’engagement ?</summary>
+      <div class="faq-body">
+        29,99 € / mois, sans engagement. Vous pouvez résilier à tout moment depuis votre espace (paiement sécurisé Stripe).
+      </div>
+    </details>
+    <details>
+      <summary>Comment s’intègre Betty sur mon site ?</summary>
+      <div class="faq-body">
+        Après paiement, vous obtenez un <strong>script unique</strong> à copier-coller sur votre site (HTML/WordPress/Wix/Webflow…). L’installation prend 2 minutes.
+      </div>
+    </details>
+    <details>
+      <summary>Mes données sont-elles protégées ?</summary>
+      <div class="faq-body">
+        Oui. Les informations sont traitées de manière confidentielle, jamais revendues, et vous restez propriétaire de vos données. Vous pouvez demander leur suppression.
+      </div>
+    </details>
+    <details>
+      <summary>Betty donne-t-elle des conseils juridiques/médicaux ?</summary>
+      <div class="faq-body">
+        Non. Betty <em>informe</em>, <em>oriente</em> et <em>qualifie</em> les demandes. Pour toute décision ou avis formel, elle propose un rendez-vous avec le professionnel.
+      </div>
+    </details>
+  </div>
+</section>
 
 <!-- Démo -->
 <div id="demo" class="demo-frame" style="margin-top:26px">
@@ -64,8 +166,7 @@
 </div>
 
 <script>
-  const qs = new URLSearchParams(location.search);
-  const botId = qs.get('bot_id') || 'avocat-001';
+  const botId = new URLSearchParams(location.search).get('bot_id') || 'avocat-001';
 
   const avatarEl = document.getElementById('bot-avatar');
   const nameEl   = document.getElementById('bot-name');
@@ -74,7 +175,7 @@
   const form     = document.getElementById('form');
   const input    = document.getElementById('input');
 
-  // Focus intelligent : taper = focus auto + saisie directe
+  // Saisie sans clic : si on tape, focus auto et on insère le caractère
   document.addEventListener('keydown', (e) => {
     const ign = ['Enter','Escape','Tab'];
     if (ign.includes(e.key)) return;
@@ -89,7 +190,6 @@
 
   function scrollToBottom(){ msgs.scrollTop = msgs.scrollHeight; }
 
-  // Métadonnées du bot de démo
   fetch(`/api/bot_meta?bot_id=${encodeURIComponent(botId)}`)
     .then(r => r.json())
     .then(meta => {
