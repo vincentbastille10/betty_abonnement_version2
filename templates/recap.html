@@ -26,8 +26,6 @@
     .title{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
     .title h2{margin:0;font-size:16px;font-weight:700}
     .badge{display:inline-flex;gap:8px;align-items:center;font-size:12px;background:rgba(16,185,129,.18);color:#b6f1da;border:1px solid rgba(16,185,129,.35);padding:6px 10px;border-radius:999px}
-    .row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
-    @media (max-width:640px){.row{grid-template-columns:1fr}}
     label{display:block;font-size:12px;color:#cdd4e5;margin:12px 0 6px}
     input{width:100%;padding:12px 14px;border-radius:12px;border:1px solid rgba(255,255,255,.08);background:rgba(7,9,22,.65);color:var(--text);outline:none}
     input[readonly]{opacity:.85}
@@ -43,6 +41,19 @@
   </style>
 </head>
 <body>
+  {% set base = (base_url or BASE_URL)|default('', true) %}
+  {% set base = base.rstrip('/') %}
+  {% set id   = (public_id or '') %}
+  {% set fullbot = 'Betty Bot — ' ~ id %}
+  {% set embed_code -%}
+<!-- Betty Bots — propulsé par Spectra Media AI -->
+<script async id="betty-widget"
+  src="{{ base }}/static/widget.js"
+  data-public-id="{{ id }}"
+  data-bot-name="{{ fullbot }}">
+</script>
+  {%- endset %}
+
   <div class="wrap">
     <div class="head">
       <div class="logo" aria-hidden="true">
@@ -61,35 +72,28 @@
     </div>
 
     <div class="grid">
+      <!-- GAUCHE -->
       <section class="card">
         <div class="title">
           <h2>Code d'intégration</h2>
           <span class="badge" id="state">• prêt à copier</span>
         </div>
 
-        <div class="row">
-          <div>
-            <label>Nom complet du bot</label>
-            <input id="botName" value="{{ full_name or '' }}" readonly>
-          </div>
-          <div>
-            <label>Identifiant unique</label>
-            <input id="botId" value="{{ public_id or '' }}" readonly>
-          </div>
-        </div>
+        <label>Nom complet du bot</label>
+        <input id="botName" value="{{ fullbot }}" readonly>
 
         <label for="code">Collez ce code juste avant <code>&lt;/body&gt;</code> de votre site</label>
         <div class="codebox">
-          <textarea id="code" class="code" readonly></textarea>
+          <textarea id="code" class="code" readonly>{{ embed_code | safe }}</textarea>
           <div class="copyBar"><button class="btn primary" id="copy">Copier</button></div>
         </div>
+
         <p class="small" id="helper">
-          Votre script charge le widget depuis
-          <code>{{ (base_url or BASE_URL) }}</code> et référence votre identifiant public.
-          Aucune autre configuration n’est nécessaire.
+          Votre script charge le widget depuis <code>{{ base }}</code> et référence votre identifiant public <code>{{ id }}</code>. Aucune autre configuration n’est nécessaire.
         </p>
       </section>
 
+      <!-- DROITE -->
       <aside class="card">
         <div class="title"><h2>Aperçu</h2><span class="sub">Simulation embarquée</span></div>
         <div class="previewWrap"><iframe id="live" title="Aperçu du bot"></iframe></div>
@@ -99,56 +103,30 @@
 
   <script>
   document.addEventListener('DOMContentLoaded', function () {
-    // Données injectées côté serveur
-    const cfg = {
-      base: {{ (base_url or BASE_URL)|tojson }},
-      id:   {{ (public_id or "")|tojson }},
-      name: {{ (full_name or "")|tojson }}
-    };
-    cfg.base = (cfg.base || '').replace(/\/$/, '');
-    const safeName = String(cfg.name || '').replace(/"/g, '&quot;');
-    const END = '<\\/script>'; // ← IMPORTANT : jamais </script> en clair !
+    const codeEl  = document.getElementById('code');
+    const copyBtn = document.getElementById('copy');
+    const state   = document.getElementById('state');
 
-    // Génère le code d'intégration (sécurisé)
-    let code;
-    if (cfg.id) {
-      code  = '<!-- Betty Bots — propulsé par Spectra Media AI -->\\n';
-      code += '<script async id="betty-widget"\\n';
-      code += '  src="' + cfg.base + '/static/widget.js"\\n';
-      code += '  data-public-id="' + cfg.id + '"\\n';
-      code += '  data-bot-name="' + safeName + '">' + END;
-    } else {
-      code = '<!-- Identifiant public manquant : revenez via la page d’inscription. -->';
-    }
-
-    // Injecte dans la textarea
-    const $code  = document.getElementById('code');
-    const $copy  = document.getElementById('copy');
-    const $state = document.getElementById('state');
-    const $help  = document.getElementById('helper');
-    $code.value  = code;
-
-    if (!cfg.id) {
-      $copy.disabled = true;
-      $copy.style.opacity = 0.6;
-      $help.classList.add('warn');
-      $help.innerHTML = 'Identifiant public manquant. Revenez via le flux d’inscription.';
-    }
-
-    $copy.addEventListener('click', async () => {
-      try { await navigator.clipboard.writeText($code.value);
-            $state.textContent = '• copié';
-            $state.style.background = 'rgba(16,185,129,.28)';
-      } catch (e) { $code.select(); document.execCommand('copy'); }
+    // Copie
+    copyBtn.addEventListener('click', async () => {
+      try { await navigator.clipboard.writeText(codeEl.value);
+            state.textContent = '• copié';
+            state.style.background = 'rgba(16,185,129,.28)';
+      } catch (e) { codeEl.select(); document.execCommand('copy'); }
     });
 
-    // Prévisualisation
+    // Prévisualisation (ATTN: on échappe </script>)
+    const base = {{ base|tojson }};
+    const id   = {{ id|tojson }};
+    const name = {{ fullbot|tojson }};
+    const END  = '<\\/script>';
+
     let html  = '<!doctype html><html><head><meta charset="utf-8">';
         html += '<meta name="viewport" content="width=device-width,initial-scale=1"></head>';
         html += '<body style="margin:0;background:#0b0f1e;height:100vh">';
-    if (cfg.id) {
-      html += '<script async id="betty-widget" src="' + cfg.base + '/static/widget.js" ';
-      html += 'data-public-id="' + cfg.id + '" data-bot-name="' + safeName + '">' + END;
+    if (id) {
+      html += '<script async id="betty-widget" src="' + base + '/static/widget.js" ';
+      html += 'data-public-id="' + id + '" data-bot-name="' + name.replace(/"/g,'&quot;') + '">' + END;
     } else {
       html += '<main style="display:grid;place-items:center;height:100%;color:#cbd5e1;font-family:Inter,system-ui">';
       html += 'ID manquant — aucune prévisualisation</main>';
