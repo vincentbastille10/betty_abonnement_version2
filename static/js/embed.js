@@ -11,7 +11,7 @@
 
   if (!botId) {
     console.warn("[Betty] bot_id manquant dans le src du script.");
-    return;
+    return;x
   }
 
   // Création de la bulle + panneau
@@ -53,7 +53,7 @@
 
   const iframe = document.createElement("iframe");
   // Pour le MVP, on charge une page neutre. Tu pourras pointer vers /chat?bot_id=... quand tu l’auras.
-  iframe.src = "about:blank";
+  iframe.src = `https://ton-domaine/chat?bot_id=${botId}`;
   iframe.setAttribute("title", "Betty Chat");
   style(iframe, { width: "100%", height: "calc(100% - 42px)", border: "0" });
 
@@ -75,3 +75,4 @@
     botId
   };
 })();
+
