@@ -1,0 +1,47 @@
+<!doctype html><html lang="fr"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>{{ bot_name }}</title>
+<style>
+  :root{--bg:#0b0f1e;--panel:#111428;--text:#e5e7eb;--accent:{{ color }}}
+  *{box-sizing:border-box} html,body{height:100%} body{margin:0;background:var(--bg);color:var(--text);font:14px/1.4 system-ui,Segoe UI,Inter,Arial}
+  .wrap{height:100%;display:grid;grid-template-rows:auto 1fr auto}
+  .head{padding:10px 12px;background:#0f1324;border-bottom:1px solid rgba(255,255,255,.06);font-weight:700}
+  .chat{padding:12px;overflow:auto}
+  .bubble{max-width:92%;padding:10px 12px;border-radius:12px;margin:8px 0;white-space:pre-wrap}
+  .user{background:#1b2142;margin-left:auto}
+  .bot{background:var(--panel);border:1px solid rgba(255,255,255,.06)}
+  form{display:flex;gap:8px;padding:10px;border-top:1px solid rgba(255,255,255,.06);background:#0f1324}
+  input{flex:1;padding:10px 12px;border-radius:10px;border:1px solid rgba(255,255,255,.09);background:#0b1026;color:var(--text)}
+  button{padding:10px 14px;border:0;border-radius:10px;background:var(--accent);color:#fff;font-weight:700;cursor:pointer}
+</style>
+</head><body>
+<div class="wrap">
+  <div class="head">{{ bot_name }}</div>
+  <div id="chat" class="chat">
+    <div class="bubble bot">Bonjour, je suis Betty. Comment puis-je vous aider ?</div>
+  </div>
+  <form id="f"><input id="m" autocomplete="off" placeholder="Écrivez…"><button>Envoyer</button></form>
+</div>
+<script>
+  const PUBLIC_ID = "{{ public_id }}";
+  const chat = document.getElementById('chat');
+  const f = document.getElementById('f');
+  const m = document.getElementById('m');
+
+  function add(msg, cls){ const b=document.createElement('div'); b.className='bubble '+cls; b.textContent=msg; chat.appendChild(b); chat.scrollTop=chat.scrollHeight; }
+
+  function stripLead(s){ return s.replace(/\s*<LEAD_JSON>[\s\S]*?<\/LEAD_JSON>\s*/g,'').trim(); }
+
+  f.addEventListener('submit', async (e)=>{
+    e.preventDefault();
+    const t = m.value.trim(); if(!t) return;
+    add(t,'user'); m.value='';
+    try{
+      const r = await fetch('/api/bettybot',{method:'POST',headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ message: t, bot_id: PUBLIC_ID })});
+      const j = await r.json();
+      add(stripLead(j.response || '…'), 'bot');
+    }catch(err){ add("⚠️ Erreur réseau.", "bot"); }
+  });
+</script>
+</body></html>
