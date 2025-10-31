@@ -1,12 +1,14 @@
 {% extends "base.html" %}
 {% block content %}
-<h1>Inscription</h1>
-<p>Votre code script sera affiché après validation du paiement.</p>
+<h1>Finalisez votre inscription</h1>
+<p>
+  Après validation, vous serez redirigé vers la page de paiement Stripe (29,99 €/mois).
+</p>
 
 <form class="form" method="post">
-  <label>Email
-    <input type="email" name="email" required placeholder="vous@exemple.com">
-  </label>
-  <button class="btn primary" type="submit">Valider et passer au paiement</button>
+  <label>Email professionnel :</label>
+  <input type="email" name="email" required placeholder="exemple@votre-entreprise.com">
+
+  <button type="submit" class="btn primary">Valider et payer</button>
 </form>
 {% endblock %}
