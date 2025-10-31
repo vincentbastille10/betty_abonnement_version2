@@ -1,15 +1,141 @@
 {% extends "base.html" %}
 {% block content %}
+
 <h1>Découvrez Betty Bot</h1>
 <p class="intro">
-  Une assistante AI plug & play, déjà formée pour votre métier.<br>
-  Testez-la dès maintenant !
+  Le chatbot métier qui <strong>qualifie vos leads 24/7</strong> et répond avec une <strong>IA spécialisée</strong>.
+  Intégration en <strong>2 minutes</strong> sur votre site. Gagnez du temps, ne ratez plus aucune opportunité.
 </p>
 
-<div class="demo-frame">
-  <iframe src="{{ url_for('chat_page') }}?bot_id=avocat-001" title="Démo du bot"
-          style="width:360px; height:520px; border:0; border-radius:18px; box-shadow:0 0 25px rgba(0,0,0,.4);"></iframe>
+<div class="hero-cta">
+  <a href="{{ url_for('config_page') }}" class="btn primary big">Configurer votre bot métier</a>
+  <a href="#demo" class="btn">Voir la démo</a>
 </div>
 
-<a href="{{ url_for('config_page') }}" class="btn primary big">Configurer votre bot métier</a>
+<!-- Bandeau de confiance -->
+<div class="trust">
+  <div>✅ Paiement sécurisé Stripe</div>
+  <div>✅ Données traitées en toute confidentialité</div>
+  <div>✅ Résiliation possible à tout moment</div>
+</div>
+
+<!-- Points clés -->
+<div class="features">
+  <div class="feature">
+    <h3>Qualification automatique</h3>
+    <p>Nom, email, téléphone, motif de contact… Betty collecte l’essentiel sans friction et vous envoie des prospects prêts à rappeler.</p>
+  </div>
+  <div class="feature">
+    <h3>IA métier</h3>
+    <p>Réponses adaptées à votre activité (avocat, médecin, immobilier, notaire) avec un ton personnalisable pour coller à votre image.</p>
+  </div>
+  <div class="feature">
+    <h3>Plug &amp; play</h3>
+    <p>Un simple script à copier. Couleur, avatar, message d’accueil, coordonnées : tout se règle en quelques clics.</p>
+  </div>
+</div>
+
+<!-- Démo -->
+<div id="demo" class="demo-frame" style="margin-top:26px">
+  <div class="chat-frame" id="chat" style="display:flex;flex-direction:column;">
+    <div style="padding:18px 16px 10px;border-bottom:1px solid var(--border);text-align:center">
+      <img id="bot-avatar" src="" alt="Avatar"
+           style="width:72px;height:72px;border-radius:999px;border:1px solid var(--border);background:#0b0f14;object-fit:cover;display:block;margin:0 auto 8px">
+      <div id="bot-name" style="font-weight:700">Betty</div>
+    </div>
+
+    <div id="messages" style="padding:16px;overflow:auto;flex:1;scroll-behavior:smooth">
+      <div id="greet" class="bubble"
+           style="max-width:280px;background:#111827;border:1px solid var(--border);border-radius:12px;padding:12px;margin:8px 0">
+        Bonjour, je suis Betty. Comment puis-je vous aider ?
+      </div>
+    </div>
+
+    <form id="form" style="padding:14px;border-top:1px solid var(--border);display:flex;gap:8px">
+      <input id="input" type="text" placeholder="Écrivez et appuyez sur Entrée…" autocomplete="off" autofocus
+             style="background:#0b0f14;border:1px solid var(--border);border-radius:10px;color:var(--text);padding:12px;flex:1">
+      <button class="btn" type="submit">Envoyer</button>
+    </form>
+  </div>
+</div>
+
+<div class="hero-cta" style="margin-top:24px">
+  <a href="{{ url_for('config_page') }}" class="btn primary big">Je crée mon bot maintenant</a>
+</div>
+
+<script>
+  const qs = new URLSearchParams(location.search);
+  const botId = qs.get('bot_id') || 'avocat-001';
+
+  const avatarEl = document.getElementById('bot-avatar');
+  const nameEl   = document.getElementById('bot-name');
+  const greetEl  = document.getElementById('greet');
+  const msgs     = document.getElementById('messages');
+  const form     = document.getElementById('form');
+  const input    = document.getElementById('input');
+
+  // Focus intelligent : taper = focus auto + saisie directe
+  document.addEventListener('keydown', (e) => {
+    const ign = ['Enter','Escape','Tab'];
+    if (ign.includes(e.key)) return;
+    if (document.activeElement !== input) {
+      input.focus();
+      if (e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey) {
+        e.preventDefault();
+        input.value += e.key;
+      }
+    }
+  });
+
+  function scrollToBottom(){ msgs.scrollTop = msgs.scrollHeight; }
+
+  // Métadonnées du bot de démo
+  fetch(`/api/bot_meta?bot_id=${encodeURIComponent(botId)}`)
+    .then(r => r.json())
+    .then(meta => {
+      nameEl.textContent = meta.name || 'Betty';
+      avatarEl.src = meta.avatar_url || '';
+      if (meta.greeting) greetEl.textContent = meta.greeting;
+      document.documentElement.style.setProperty('--primary', meta.color_hex || '#4F46E5');
+      scrollToBottom();
+    }).catch(()=>{});
+
+  function addBubble(text, mine=false){
+    const div = document.createElement('div');
+    div.className = 'bubble';
+    div.style.maxWidth = '280px';
+    div.style.border = '1px solid var(--border)';
+    div.style.borderRadius = '12px';
+    div.style.padding = '12px';
+    div.style.margin = '8px 0';
+    div.style.whiteSpace = 'pre-wrap';
+    div.textContent = text;
+    if(mine){ div.style.background='#1b2230'; div.style.marginLeft='auto'; }
+    else    { div.style.background='#111827'; div.style.marginRight='auto'; }
+    msgs.appendChild(div);
+    scrollToBottom();
+  }
+
+  form.addEventListener('submit', async (e)=>{
+    e.preventDefault();
+    const text = input.value.trim();
+    if(!text) return;
+    addBubble(text, true);
+    input.value = '';
+    try {
+      const r = await fetch('/api/bettybot', {
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ message: text, bot_id: botId })
+      });
+      const j = await r.json();
+      addBubble(j.response || "Désolé, une erreur est survenue.");
+    } catch {
+      addBubble("Désolé, une erreur est survenue.");
+    }
+  });
+
+  window.addEventListener('load', ()=>{ input.focus(); scrollToBottom(); });
+</script>
+
 {% endblock %}
