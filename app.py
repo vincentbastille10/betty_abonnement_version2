@@ -81,9 +81,9 @@ def parse_contact_info(text: str) -> dict:
 # MINI-DB DES BOTS
 # =========================
 BOTS = {
-    "avocat-001":  {"pack": "avocat",  "name": "Betty (Avocat)",    "color": "#4F46E5", "avatar_file": "avocat.png",  "profile": {}, "greeting": ""},
-    "immo-002":    {"pack": "immo",    "name": "Betty (Immobilier)","color": "#16A34A", "avatar_file": "immo.png",    "profile": {}, "greeting": ""},
-    "medecin-003": {"pack": "medecin", "name": "Betty (Médecin)",   "color": "#0284C7", "avatar_file": "medecin.png", "profile": {}, "greeting": ""},
+    "avocat-001":  {"pack": "avocat",  "name": "Betty (Avocat)",    "color": "#4F46E5", "avatar_file": "avocat.jpg",  "profile": {}, "greeting": ""},
+    "immo-002":    {"pack": "immo",    "name": "Betty (Immobilier)","color": "#16A34A", "avatar_file": "immo.jpg",    "profile": {}, "greeting": ""},
+    "medecin-003": {"pack": "medecin", "name": "Betty (Médecin)",   "color": "#0284C7", "avatar_file": "medecin.jpg", "profile": {}, "greeting": ""},
 }
 
 # =========================
