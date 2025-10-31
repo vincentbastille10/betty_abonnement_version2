@@ -1,123 +1,120 @@
 {% extends "base.html" %}
 {% block content %}
 <h1>Configurer votre chatbot</h1>
-<p class="hint">Choisissez un métier, une couleur, ajustez la personnalité et personnalisez le message d’accueil.</p>
+<p class="hint">Choisissez un métier, une couleur, ajustez la personnalité, ajoutez votre message d’accueil et vos coordonnées.</p>
 
 <form class="form" method="post" id="config-form">
-  <!-- ====== 1) Métier (avatars) ====== -->
-  <div class="field">
-    <label class="label">Métier</label>
-    <div class="avatar-grid">
-      <label class="avatar-card">
+  <!-- Métier -->
+  <div>
+    <div class="label">Métier</div>
+    <div class="avatar-grid" id="packs">
+      <label class="avatar-card" data-pack="avocat">
         <input type="radio" name="pack" value="avocat" checked>
-        <img src="{{ url_for('static', filename='avocat.png') }}" alt="Avocat">
+        <img src="{{ url_for('static', filename='avocat.png') }}" onerror="this.src='https://api.dicebear.com/8.x/shapes/png?seed=avocat'">
         <span>Avocat</span>
       </label>
-
-      <label class="avatar-card">
+      <label class="avatar-card" data-pack="medecin">
         <input type="radio" name="pack" value="medecin">
-        <img src="{{ url_for('static', filename='medecin.png') }}" alt="Médecin">
+        <img src="{{ url_for('static', filename='medecin.png') }}" onerror="this.src='https://api.dicebear.com/8.x/shapes/png?seed=medecin'">
         <span>Médecin</span>
       </label>
-
-      <label class="avatar-card">
+      <label class="avatar-card" data-pack="immo">
         <input type="radio" name="pack" value="immo">
-        <img src="{{ url_for('static', filename='immo.png') }}" alt="Immobilier">
+        <img src="{{ url_for('static', filename='immo.png') }}" onerror="this.src='https://api.dicebear.com/8.x/shapes/png?seed=immo'">
         <span>Immobilier</span>
       </label>
     </div>
-
-    <!-- on déduit l’avatar du pack (tu peux changer la logique si besoin) -->
     <input type="hidden" name="avatar" id="avatar-file" value="avocat.png">
   </div>
 
-  <!-- ====== 2) Couleur (6 swatches) ====== -->
-  <div class="field">
-    <label class="label">Couleur</label>
-    <div class="swatches">
-      <label class="swatch"><input type="radio" name="color" value="#4F46E5" checked><span style="--c:#4F46E5"></span></label>
-      <label class="swatch"><input type="radio" name="color" value="#16A34A"><span style="--c:#16A34A"></span></label>
-      <label class="swatch"><input type="radio" name="color" value="#0284C7"><span style="--c:#0284C7"></span></label>
-      <label class="swatch"><input type="radio" name="color" value="#F59E0B"><span style="--c:#F59E0B"></span></label>
-      <label class="swatch"><input type="radio" name="color" value="#DC2626"><span style="--c:#DC2626"></span></label>
-      <label class="swatch"><input type="radio" name="color" value="#9333EA"><span style="--c:#9333EA"></span></label>
+  <!-- Couleur -->
+  <div>
+    <div class="label">Couleur</div>
+    <div class="swatches" id="swatches">
+      <label class="swatch selected"><input type="radio" name="color" value="#4F46E5" checked><span class="chip" style="background:#4F46E5"></span></label>
+      <label class="swatch"><input type="radio" name="color" value="#16A34A"><span class="chip" style="background:#16A34A"></span></label>
+      <label class="swatch"><input type="radio" name="color" value="#0284C7"><span class="chip" style="background:#0284C7"></span></label>
+      <label class="swatch"><input type="radio" name="color" value="#F59E0B"><span class="chip" style="background:#F59E0B"></span></label>
+      <label class="swatch"><input type="radio" name="color" value="#DC2626"><span class="chip" style="background:#DC2626"></span></label>
+      <label class="swatch"><input type="radio" name="color" value="#9333EA"><span class="chip" style="background:#9333EA"></span></label>
     </div>
   </div>
 
-  <!-- ====== 3) Curseur 2D personnalité ====== -->
-  <div class="field">
-    <label class="label">Personnalité</label>
+  <!-- Curseur 2D -->
+  <div>
+    <div class="label">Personnalité</div>
     <div class="axes-wrap">
       <div class="axes" id="axes">
         <div class="axes-dot" id="axes-dot"></div>
-        <div class="axes-line h"></div>
-        <div class="axes-line v"></div>
+        <div class="axes-line h"></div><div class="axes-line v"></div>
         <div class="axes-label top">Chaleureuse</div>
         <div class="axes-label bottom">Précise</div>
         <div class="axes-label left">Empathique</div>
         <div class="axes-label right">Efficace</div>
       </div>
-      <input type="hidden" name="persona_x" id="persona_x" value="0">  <!-- -1 = gauche (Empathique) / +1 = droite (Efficace) -->
-      <input type="hidden" name="persona_y" id="persona_y" value="0">  <!-- -1 = bas (Précise) / +1 = haut (Chaleureuse) -->
+      <input type="hidden" name="persona_x" id="persona_x" value="0">
+      <input type="hidden" name="persona_y" id="persona_y" value="0">
     </div>
   </div>
 
-  <!-- ====== 4) Message d’accueil ====== -->
-  <div class="field">
-    <label class="label">Message d’accueil</label>
-    <input type="text" name="greeting" placeholder="Bonjour, je suis Betty. Comment puis-je vous aider ?"
-           value="Bonjour, je suis Betty. Comment puis-je vous aider ?">
+  <!-- Greeting -->
+  <div>
+    <div class="label">Message d’accueil</div>
+    <input type="text" name="greeting" value="Bonjour, je suis Betty. Comment puis-je vous aider ?">
   </div>
 
-  <!-- ====== 5) Infos de contact du client ====== -->
-  <div class="field">
-    <label class="label">Vos informations (téléphone, adresse, etc.)</label>
-    <textarea name="contact_info" rows="3" placeholder="Ex. 02 43 00 00 00 — 12 rue de la Paix, 72000 Le Mans"></textarea>
+  <!-- Coordonnées (pour alimenter le bot vendu) -->
+  <div>
+    <div class="label">Vos coordonnées (tél., adresse, horaires, email…)</div>
+    <textarea name="contact_info" rows="3" placeholder="Ex. Cabinet Dupond — 02 43 00 00 00 — 12 rue de la Paix, 72000 Le Mans — Horaires: Lun-Ven 9h-18h — contact@exemple.com"></textarea>
   </div>
 
   <button class="btn primary" type="submit">Enregistrer et payer</button>
 </form>
 
 <script>
-  // Déduire avatar depuis pack
-  const packRadios = document.querySelectorAll('input[name="pack"]');
+  // Sélection visuelle des cartes métier
+  const packs = document.getElementById('packs');
   const avatarFile = document.getElementById('avatar-file');
-  packRadios.forEach(r => r.addEventListener('change', () => {
-    const v = r.value;
-    avatarFile.value = (v === 'avocat') ? 'avocat.png' : (v === 'medecin' ? 'medecin.png' : 'immo.png');
-  }));
+  packs.querySelectorAll('.avatar-card').forEach(card=>{
+    if(card.querySelector('input').checked) card.classList.add('selected');
+    card.addEventListener('click', ()=>{
+      packs.querySelectorAll('.avatar-card').forEach(c=>c.classList.remove('selected'));
+      card.classList.add('selected');
+      card.querySelector('input').checked = true;
+      const p = card.dataset.pack;
+      avatarFile.value = (p==='avocat'?'avocat.png':(p==='medecin'?'medecin.png':'immo.png'));
+    });
+  });
+
+  // Sélection visuelle des swatches
+  const swatches = document.getElementById('swatches');
+  swatches.querySelectorAll('.swatch').forEach(s=>{
+    s.addEventListener('click', ()=>{
+      swatches.querySelectorAll('.swatch').forEach(x=>x.classList.remove('selected'));
+      s.classList.add('selected');
+      s.querySelector('input').checked = true;
+    });
+  });
 
   // Curseur 2D
-  const axes = document.getElementById('axes');
-  const dot  = document.getElementById('axes-dot');
-  const inputX = document.getElementById('persona_x');
-  const inputY = document.getElementById('persona_y');
-
-  function setDot(cx, cy) {
-    // cx, cy en pixels relatifs au conteneur
-    const rect = axes.getBoundingClientRect();
-    const x = Math.max(0, Math.min(cx - rect.left, rect.width));
-    const y = Math.max(0, Math.min(cy - rect.top,  rect.height));
-    dot.style.left = (x - 8) + 'px';
-    dot.style.top  = (y - 8) + 'px';
-    // map en [-1, +1] (0,0) au centre
-    const nx = (x / rect.width) * 2 - 1;    // -1 gauche, +1 droite
-    const ny = -((y / rect.height) * 2 - 1); // +1 haut, -1 bas
-    inputX.value = nx.toFixed(2);
-    inputY.value = ny.toFixed(2);
-  }
-  // position initiale : centre
-  setTimeout(() => {
+  const axes = document.getElementById('axes'); const dot = document.getElementById('axes-dot');
+  const inputX = document.getElementById('persona_x'); const inputY = document.getElementById('persona_y');
+  function setDotAt(clientX, clientY){
     const r = axes.getBoundingClientRect();
-    setDot(r.left + r.width/2, r.top + r.height/2);
-  }, 0);
-
-  axes.addEventListener('pointerdown', (e) => {
-    setDot(e.clientX, e.clientY);
-    const move = (ev) => setDot(ev.clientX, ev.clientY);
-    const up = () => { window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', up); };
-    window.addEventListener('pointermove', move);
-    window.addEventListener('pointerup', up);
+    const x = Math.max(0, Math.min(clientX - r.left, r.width));
+    const y = Math.max(0, Math.min(clientY - r.top,  r.height));
+    dot.style.left = (x-9)+'px'; dot.style.top = (y-9)+'px';
+    inputX.value = ((x/r.width)*2-1).toFixed(2);      // -1=G (Empathique), +1=D (Efficace)
+    inputY.value = (-((y/r.height)*2-1)).toFixed(2);  // -1=Bas (Précise), +1=Haut (Chaleureuse)
+  }
+  // centre par défaut
+  setTimeout(()=>{ const r=axes.getBoundingClientRect(); setDotAt(r.left+r.width/2, r.top+r.height/2); },0);
+  axes.addEventListener('pointerdown', e=>{
+    setDotAt(e.clientX, e.clientY);
+    const move=ev=>setDotAt(ev.clientX, ev.clientY);
+    const up=()=>{window.removeEventListener('pointermove',move);window.removeEventListener('pointerup',up);}
+    window.addEventListener('pointermove',move); window.addEventListener('pointerup',up);
   });
 </script>
 {% endblock %}
