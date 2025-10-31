@@ -5,19 +5,19 @@ import os, yaml, requests, re, stripe
 app = Flask(__name__)
 
 # =========================
-# CONFIG
+# CONFIG (env)
 # =========================
-TOGETHER_API_KEY = os.getenv("TOGETHER_API_KEY") or "TA_CLE_TOGETHER_ICI"
+TOGETHER_API_KEY = os.getenv("TOGETHER_API_KEY", "TA_CLE_TOGETHER_ICI")
 TOGETHER_API_URL = "https://api.together.xyz/v1/chat/completions"
-LLM_MODEL = os.getenv("LLM_MODEL") or "meta-llama/Meta-Llama-3-8B-Instruct"
-LLM_MAX_TOKENS = int(os.getenv("LLM_MAX_TOKENS") or 90)
+LLM_MODEL        = os.getenv("LLM_MODEL", "meta-llama/Meta-Llama-3-8B-Instruct")
+LLM_MAX_TOKENS   = int(os.getenv("LLM_MAX_TOKENS", "90"))
 
-stripe.api_key = os.getenv("STRIPE_SECRET_KEY") or "sk_test_xxx"
-PRICE_ID = os.getenv("STRIPE_PRICE_ID") or "price_xxx"
-BASE_URL = (os.getenv("BASE_URL") or "http://127.0.0.1:5000").rstrip("/")
+stripe.api_key   = os.getenv("STRIPE_SECRET_KEY", "sk_test_xxx")
+PRICE_ID         = os.getenv("STRIPE_PRICE_ID", "price_xxx")  # abonnement 29,99 €/mois
+BASE_URL         = (os.getenv("BASE_URL", "http://127.0.0.1:5000")).rstrip("/")
 
 # =========================
-# FONCTIONS UTILES
+# HELPERS
 # =========================
 def static_url(filename: str) -> str:
     return url_for("static", filename=filename, _external=True)
@@ -25,7 +25,7 @@ def static_url(filename: str) -> str:
 def load_pack_prompt(pack_name: str) -> str:
     path = f"data/packs/{pack_name}.yaml"
     if not os.path.exists(path):
-        return "Tu es une assistante AI professionnelle. Réponds avec clarté et concision."
+        return "Tu es une assistante AI professionnelle. Réponds clairement et concrètement."
     with open(path, "r") as f:
         data = yaml.safe_load(f) or {}
     return data.get("prompt", "Tu es une assistante AI professionnelle.")
@@ -33,19 +33,19 @@ def load_pack_prompt(pack_name: str) -> str:
 def build_business_block(profile: dict) -> str:
     if not profile:
         return ""
-    lignes = ["\n---\nINFORMATIONS ETABLISSEMENT (à utiliser dans tes réponses) :"]
-    if profile.get("name"): lignes.append(f"• Nom : {profile['name']}")
-    if profile.get("phone"): lignes.append(f"• Téléphone : {profile['phone']}")
-    if profile.get("email"): lignes.append(f"• Email : {profile['email']}")
-    if profile.get("address"): lignes.append(f"• Adresse : {profile['address']}")
-    if profile.get("hours"): lignes.append(f"• Horaires : {profile['hours']}")
-    lignes.append("---\n")
-    return "\n".join(lignes)
+    lines = ["\n---\nINFORMATIONS ETABLISSEMENT (utilise-les dans tes réponses) :"]
+    if profile.get("name"):    lines.append(f"• Nom : {profile['name']}")
+    if profile.get("phone"):   lines.append(f"• Téléphone : {profile['phone']}")
+    if profile.get("email"):   lines.append(f"• Email : {profile['email']}")
+    if profile.get("address"): lines.append(f"• Adresse : {profile['address']}")
+    if profile.get("hours"):   lines.append(f"• Horaires : {profile['hours']}")
+    lines.append("---\n")
+    return "\n".join(lines)
 
 def build_system_prompt(pack_name: str, profile: dict, greeting: str = "") -> str:
     base = load_pack_prompt(pack_name)
     biz  = build_business_block(profile)
-    greet = f"\nMessage d'accueil recommandé : {greeting}\n" if greeting else ""
+    greet= f"\nMessage d'accueil recommandé : {greeting}\n" if greeting else ""
     return f"{base}{biz}{greet}"
 
 def query_llm(user_input: str, pack_name: str, profile: dict = None, greeting: str = "") -> str:
@@ -56,7 +56,7 @@ def query_llm(user_input: str, pack_name: str, profile: dict = None, greeting: s
         "max_tokens": LLM_MAX_TOKENS,
         "messages": [
             {"role": "system", "content": system_prompt},
-            {"role": "user", "content": user_input}
+            {"role": "user",   "content": user_input}
         ]
     }
     try:
@@ -68,26 +68,27 @@ def query_llm(user_input: str, pack_name: str, profile: dict = None, greeting: s
         return "Désolé, une erreur est survenue lors de la génération de la réponse."
 
 def parse_contact_info(text: str) -> dict:
+    """Heuristiques simples pour extraire téléphone/email/adresse/horaires/nom depuis un champ libre."""
     if not text: return {}
     d = {}
-    m = re.search(r'(\+?\d[\d\s\.]{6,})', text);           d["phone"]   = m.group(1) if m else None
-    m = re.search(r'[\w\.-]+@[\w\.-]+\.\w+', text);        d["email"]   = m.group(0) if m else None
-    m = re.search(r'horaires?:\s*(.+)', text, re.I);       d["hours"]   = m.group(1).strip() if m else None
+    m = re.search(r'(\+?\d[\d\s\.\-]{6,})', text);                 d["phone"]   = m.group(1) if m else None
+    m = re.search(r'[\w\.-]+@[\w\.-]+\.\w+', text);                d["email"]   = m.group(0) if m else None
+    m = re.search(r'horaires?\s*:\s*(.+)', text, re.I);            d["hours"]   = m.group(1).strip() if m else None
     m = re.search(r'(rue|avenue|bd|boulevard|place).+', text, re.I); d["address"] = m.group(0).strip() if m else None
-    m = re.search(r'(nom|cabinet|agence)\s*:\s*(.+)', text, re.I);   d["name"] = m.group(2).strip() if m else None
-    return {k:v for k,v in d.items() if v}
+    m = re.search(r'(nom|cabinet|agence)\s*:\s*(.+)', text, re.I); d["name"]    = m.group(2).strip() if m else None
+    return {k: v for k, v in d.items() if v}
 
 # =========================
-# MINI-DB DES BOTS
+# MINI-DB (démo)
 # =========================
 BOTS = {
-    "avocat-001":  {"pack": "avocat",  "name": "Betty (Avocat)",    "color": "#4F46E5", "avatar_file": "avocat.jpg",  "profile": {}, "greeting": ""},
-    "immo-002":    {"pack": "immo",    "name": "Betty (Immobilier)","color": "#16A34A", "avatar_file": "immo.jpg",    "profile": {}, "greeting": ""},
-    "medecin-003": {"pack": "medecin", "name": "Betty (Médecin)",   "color": "#0284C7", "avatar_file": "medecin.jpg", "profile": {}, "greeting": ""},
+    "avocat-001":  {"pack": "avocat",  "name": "Betty (Avocat)",     "color": "#4F46E5", "avatar_file": "avocat.jpg",  "profile": {}, "greeting": ""},
+    "immo-002":    {"pack": "immo",    "name": "Betty (Immobilier)", "color": "#16A34A", "avatar_file": "immo.jpg",    "profile": {}, "greeting": ""},
+    "medecin-003": {"pack": "medecin", "name": "Betty (Médecin)",    "color": "#0284C7", "avatar_file": "medecin.jpg", "profile": {}, "greeting": ""},
 }
 
 # =========================
-# ROUTES PAGES
+# PAGES
 # =========================
 @app.route("/")
 def index():
@@ -96,13 +97,13 @@ def index():
 @app.route("/config", methods=["GET", "POST"])
 def config_page():
     if request.method == "POST":
-        pack       = request.form.get("pack", "avocat")
-        color      = request.form.get("color", "#4F46E5")
-        avatar     = request.form.get("avatar", "avocat.png")
-        greeting   = request.form.get("greeting", "")
-        contact    = request.form.get("contact_info", "")
-        persona_x  = request.form.get("persona_x", "0")
-        persona_y  = request.form.get("persona_y", "0")
+        pack      = request.form.get("pack", "avocat")
+        color     = request.form.get("color", "#4F46E5")
+        avatar    = request.form.get("avatar", "avocat.jpg")
+        greeting  = request.form.get("greeting", "")
+        contact   = request.form.get("contact_info", "")
+        persona_x = request.form.get("persona_x", "0")
+        persona_y = request.form.get("persona_y", "0")
         return redirect(url_for("inscription_page",
                                 pack=pack, color=color, avatar=avatar,
                                 greeting=greeting, contact=contact,
@@ -115,16 +116,19 @@ def inscription_page():
         email   = request.form.get("email")
         pack    = request.args.get("pack", "avocat")
         color   = request.args.get("color", "#4F46E5")
-        avatar  = request.args.get("avatar", "avocat.png")
+        avatar  = request.args.get("avatar", "avocat.jpg")
         greet   = request.args.get("greeting", "") or ""
         contact = request.args.get("contact", "") or ""
         px      = request.args.get("px", "0")
         py      = request.args.get("py", "0")
 
+        # on associe temporairement le profil au bot-type choisi (démo)
         profile = parse_contact_info(contact)
-        bot_id = "avocat-001" if pack=="avocat" else ("medecin-003" if pack=="medecin" else "immo-002")
-        BOTS[bot_id]["profile"] = profile
+        bot_id = "avocat-001" if pack == "avocat" else ("medecin-003" if pack == "medecin" else "immo-002")
+        BOTS[bot_id]["profile"]  = profile
         BOTS[bot_id]["greeting"] = greet
+        BOTS[bot_id]["color"]    = color
+        BOTS[bot_id]["avatar_file"] = avatar
 
         session = stripe.checkout.Session.create(
             mode="subscription",
@@ -155,12 +159,17 @@ def chat_page():
 # =========================
 @app.route("/api/bettybot", methods=["POST"])
 def bettybot_reply():
-    payload = request.get_json(force=True, silent=True) or {}
+    payload    = request.get_json(force=True, silent=True) or {}
     user_input = payload.get("message", "").strip()
-    bot_id = payload.get("bot_id", "avocat-001")
+    bot_id     = payload.get("bot_id", "avocat-001")
 
     bot = BOTS.get(bot_id, BOTS["avocat-001"])
-    answer = query_llm(user_input, bot["pack"], profile=bot.get("profile", {}), greeting=bot.get("greeting",""))
+    answer = query_llm(
+        user_input,
+        bot["pack"],
+        profile=bot.get("profile", {}),
+        greeting=bot.get("greeting", "")
+    )
     return jsonify({"response": answer})
 
 @app.route("/api/bot_meta")
@@ -178,7 +187,7 @@ def bot_meta():
     })
 
 # =========================
-# RUN LOCAL
+# RUN (local)
 # =========================
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000, debug=True)
