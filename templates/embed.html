@@ -31,7 +31,7 @@
   const f = document.getElementById('f');
   const m = document.getElementById('m');
 
-  // --------- ID de conversation persistant (robuste sur Wix / cookies bloqués) ----------
+  // --------- ID de conversation persistant (robuste Wix) ----------
   const KEY = "betty_cid_" + (PUBLIC_ID || "default");
   let CONV_ID = localStorage.getItem(KEY);
   if (!CONV_ID) {
@@ -57,7 +57,11 @@
       const r = await fetch('/api/bettybot',{
         method:'POST',
         headers:{'Content-Type':'application/json'},
-        body: JSON.stringify({ message: t, bot_id: PUBLIC_ID, conv_id: CONV_ID })
+        body: JSON.stringify({
+          message: t,
+          bot_id: PUBLIC_ID,
+          conv_id: CONV_ID
+        })
       });
       const j = await r.json();
       add(stripLead(j.response || '…'), 'bot');
