@@ -1,8 +1,9 @@
 {
   "functions": {
-    "api/index.py": { "runtime": "vercel-python@3.12" }
+    "api/**/*.py": { "runtime": "python3.11" }
   },
   "routes": [
+    { "src": "^/static/(.*)$", "dest": "/static/$1" },
     { "src": "/(.*)", "dest": "/api/index.py" }
   ]
 }
