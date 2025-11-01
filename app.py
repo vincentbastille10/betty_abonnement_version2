@@ -5,13 +5,13 @@ import os, yaml, requests, re, stripe, json, uuid, hashlib, sqlite3
 from pathlib import Path
 from contextlib import contextmanager
 
-app = Flask(__name__, template_folder="templates", static_folder="static")
+app = Flask(__name__)
 app.secret_key = os.getenv("FLASK_SECRET_KEY", "dev-secret-change-me")
 
-# ---- Cookies compat iframe (Wix / domaines tiers)
+# --- Cookies compat iframe (Wix / domaines tiers) ---
 SESSION_SECURE = os.getenv("SESSION_SECURE", "true").lower() == "true"
 app.config.update(
-    SESSION_COOKIE_SAMESITE="None",
+    SESSION_COOKIE_SAMESITE='None',
     SESSION_COOKIE_SECURE=SESSION_SECURE
 )
 
@@ -26,18 +26,17 @@ LLM_MAX_TOKENS = int(os.getenv("LLM_MAX_TOKENS", "180"))
 stripe.api_key = os.getenv("STRIPE_SECRET_KEY", "").strip()
 PRICE_ID = os.getenv("STRIPE_PRICE_ID", "").strip()  # 29,99 €/mois
 
-BASE_URL = (os.getenv("BASE_URL", "https://betty-abonnement-version2.vercel.app")).rstrip("/")
+BASE_URL = (os.getenv("BASE_URL", "http://127.0.0.1:5000")).rstrip("/")
 
-# Mailjet
 MJ_API_KEY    = os.getenv("MJ_API_KEY", "").strip()
 MJ_API_SECRET = os.getenv("MJ_API_SECRET", "").strip()
 MJ_FROM_EMAIL = os.getenv("MJ_FROM_EMAIL", "no-reply@spectramedia.ai").strip()
 MJ_FROM_NAME  = os.getenv("MJ_FROM_NAME", "Spectra Media AI").strip()
 
-app.jinja_env.globals["BASE_URL"] = BASE_URL
+app.jinja_env.globals['BASE_URL'] = BASE_URL
 
 # =========================
-# DB SQLite — /tmp en serverless
+# DB SQLite (persistant) — /tmp en serverless, data/app.db en local
 # =========================
 def pick_db_path() -> Path:
     env_forced = os.getenv("DB_PATH")
@@ -77,7 +76,8 @@ def db_init():
             buyer_email  TEXT,
             owner_name   TEXT,
             profile_json TEXT
-        )""")
+        )
+        """)
         con.commit()
 
 def db_upsert_bot(bot: dict):
@@ -124,6 +124,7 @@ def db_get_bot(public_id: str):
             d["profile"] = {}
     return d
 
+# init DB au cold start
 db_init()
 
 # =========================
@@ -160,30 +161,39 @@ def build_business_block(profile: dict) -> str:
 def build_system_prompt(pack_name: str, profile: dict, greeting: str = "") -> str:
     base = load_pack_prompt(pack_name)
     biz  = build_business_block(profile)
+
+    # Règles spécifiques : pour le pack "medecin", l'EMAIL PATIENT est OBLIGATOIRE avant stage=ready
+    if pack_name == "medecin":
+        qualif_order = "**motif**, **email (OBLIGATOIRE)**, **téléphone**, **nom complet**, **disponibilités**"
+        ready_rule   = '— `stage = "ready"` uniquement si **motif + nom + email**.'
+    else:
+        qualif_order = "**motif**, **téléphone** OU **email**, **nom complet**, **disponibilités**"
+        ready_rule   = '— `stage = "ready"` uniquement si **motif + nom + (email ou téléphone)**.'
+
     guide = f"""
 Tu es **Betty**, assistante {pack_name}. Objectif prioritaire : **QUALIFIER** le prospect puis **proposer un rendez-vous**.
 
 RÈGLES DE CONVERSATION (OBLIGATOIRES) :
-- Pose **UNE** question à la fois (2 phrases max).
+- Pose **UNE seule question** à la fois. 2 phrases max par message.
 - Oriente la qualification dès les 1ers échanges.
-- Champs à collecter (ordre conseillé) : **motif**, **email (OBLIGATOIRE)**, **téléphone**, **nom complet**, **disponibilités**.
-- Dès que tu as **motif + nom + email**, dis : "Parfait, je transmets au cabinet pour vous proposer un créneau." et passe `stage:"ready"`.
-- Tu ne donnes pas d'avis médical ; tu orientes.
+- Champs à collecter (ordre conseillé) : {qualif_order}
+- Dès que les conditions sont réunies, annonce : "Parfait, je transmets au cabinet pour vous proposer un créneau." et passe le stage à "ready".
+- Tu ne donnes pas d'avis juridique/médical ; tu orientes vers le pro.
+- **Ne te réinitialise jamais** en cours d’échange.
 
 RÈGLES SUPPLÉMENTAIRES (QUALIF LEAD) :
-- Pas de placeholders ({{Email}}). Pose des questions concrètes :
-  1) "Quelle est votre adresse e-mail ?",
-  2) "Quel est votre numéro de téléphone ?",
-  3) "Quel est votre nom complet ?",
-  4) Demander des disponibilités si utile.
-- N'affiche pas le JSON ci-dessous. Réponds normalement, puis ajoute juste la balise technique en **dernière ligne**.
+- Ne JAMAIS afficher de variables ou placeholders (ex. {{Téléphone}}, {{Email}}). Pose des questions concrètes :
+  1) "Quel est votre numéro de téléphone ?" (ou "Quelle est votre adresse e-mail ?"),
+  2) "Quel est votre nom complet ?",
+  3) Demander des disponibilités si utile.
+- N'affiche pas le JSON ci-dessous. Réponds normalement, puis ajoute juste la balise technique en dernière ligne.
 
 ### SORTIE LEAD JSON
-À CHAQUE message, ajoute en **dernière ligne** (sans texte avant/après) :
+À CHAQUE message, ajoute en **dernière ligne** (sans texte avant/après, sans markdown) un tag :
 <LEAD_JSON>{{"reason": "<motif ou ''>", "name": "<nom ou ''>", "email": "<email ou ''>", "phone": "<téléphone ou ''>", "availability": "<dispo ou ''>", "stage": "<collecting|ready>"}}</LEAD_JSON>
 
-- `stage = "ready"` **uniquement** si **motif + nom + email** sont présents.
-- JSON **une seule ligne** valide (pas de ``` ni retours ligne).
+{ready_rule}
+- Le JSON doit être **une seule ligne** valide. Pas de retour à la ligne, pas de ``` ni autre balise.
 """
     greet = f"\nMessage d'accueil recommandé : {greeting}\n" if greeting else ""
     return f"{base}\n{biz}\n{guide}\n{greet}"
@@ -199,18 +209,26 @@ def call_llm_with_history(system_prompt: str, history: list, user_input: str) ->
     try:
         r = requests.post(TOGETHER_API_URL, headers=headers, json=payload, timeout=30)
         if not r.ok:
-            try: err = r.json()
-            except Exception: err = {"status": r.status_code, "text": r.text[:200]}
+            try:
+                err = r.json()
+            except Exception:
+                err = {"status": r.status_code, "text": r.text[:200]}
             return f"⚠️ Erreur Together: {err}"
         data = r.json()
-        content = data.get("choices", [{}])[0].get("message", {}).get("content", "").strip()
+        content = (
+            data.get("choices", [{}])[0]
+                .get("message", {})
+                .get("content", "")
+                .strip()
+        )
         return content or "Désolé, je n’ai pas pu générer de réponse."
     except Exception as e:
         print("[LLM ERROR]", type(e).__name__, e)
         return f"⚠️ Exception serveur: {type(e).__name__}: {e}"
 
 def parse_contact_info(text: str) -> dict:
-    if not text: return {}
+    if not text:
+        return {}
     d = {}
     m = re.search(r'(\+?\d[\d\s\.\-]{6,})', text);                   d["phone"]   = m.group(1) if m else None
     m = re.search(r'[\w\.-]+@[\w\.-]+\.\w+', text);                  d["email"]   = m.group(0) if m else None
@@ -222,9 +240,11 @@ def parse_contact_info(text: str) -> dict:
 LEAD_TAG_RE = re.compile(r"<LEAD_JSON>(\{.*?\})</LEAD_JSON>$")
 
 def extract_lead_json(text: str):
-    if not text: return text, None
+    if not text:
+        return text, None
     m = LEAD_TAG_RE.search(text)
-    if not m: return text, None
+    if not m:
+        return text, None
     lead_raw = m.group(1)
     message = text[:m.start()].rstrip()
     try:
@@ -239,12 +259,12 @@ def send_lead_email(to_email: str, lead: dict, bot_name: str = "Betty Bot"):
         return
     subject = f"Nouveau lead qualifié via {bot_name}"
     text = (
-        f"Motif         : {lead.get('reason','')}\n"
-        f"Nom           : {lead.get('name','')}\n"
-        f"Email         : {lead.get('email','')}\n"
-        f"Téléphone     : {lead.get('phone','')}\n"
-        f"Disponibilités: {lead.get('availability','')}\n"
-        f"Statut        : {lead.get('stage','')}\n"
+        f"Motif        : {lead.get('reason','')}\n"
+        f"Nom          : {lead.get('name','')}\n"
+        f"Email        : {lead.get('email','')}\n"
+        f"Téléphone    : {lead.get('phone','')}\n"
+        f"Disponibilités : {lead.get('availability','')}\n"
+        f"Statut       : {lead.get('stage','')}\n"
     )
     payload = {
         "Messages": [{
@@ -255,15 +275,18 @@ def send_lead_email(to_email: str, lead: dict, bot_name: str = "Betty Bot"):
         }]
     }
     try:
-        r = requests.post("https://api.mailjet.com/v3.1/send",
-                          auth=(MJ_API_KEY, MJ_API_SECRET),
-                          json=payload, timeout=15)
+        r = requests.post(
+            "https://api.mailjet.com/v3.1/send",
+            auth=(MJ_API_KEY, MJ_API_SECRET),
+            json=payload,
+            timeout=15
+        )
         print("[LEAD][MAILJET]", "OK" if r.ok else f"KO {r.status_code} {r.text[:120]}")
     except Exception as e:
         print("[LEAD][MAILJET][EXC]", type(e).__name__, e)
 
 # =========================
-# MINI-DB mémoire (seeds) + utilitaires
+# MINI-DB (seed mémoire pour defaults)
 # =========================
 BOTS = {
     "avocat-001":  {"pack":"avocat","name":"Betty Bot (Avocat)","color":"#4F46E5","avatar_file":"avocat.jpg","profile":{},"greeting":"","buyer_email":None,"owner_name":None,"public_id":None},
@@ -276,12 +299,13 @@ def _gen_public_id(email: str, bot_key: str) -> str:
     return f"{bot_key}-{h}"
 
 def find_bot_by_public_id(public_id: str):
-    """DB prioritaire ; fallback mémoire."""
     if not public_id:
         return None, None
-    db_bot = db_get_bot(public_id)
-    if db_bot:
-        return db_bot.get("bot_key"), db_bot
+    # 1) DB prioritaire
+    bot = db_get_bot(public_id)
+    if bot:
+        return bot.get("bot_key"), bot
+    # 2) Fallback mémoire (dev)
     parts = public_id.split("-")
     if len(parts) < 3:
         for k, b in BOTS.items():
@@ -291,12 +315,13 @@ def find_bot_by_public_id(public_id: str):
         return None, None
     bot_key = "-".join(parts[:2])
     b = BOTS.get(bot_key)
-    if not b: return None, None
+    if not b:
+        return None, None
     b2 = dict(b); b2["bot_key"] = bot_key; b2["public_id"] = public_id
     return bot_key, b2
 
-# Historique côté serveur (secours)
-CONVS = {}  # conv_id -> list(messages)
+# Mémoire de conversations côté serveur (fallback si cookies bloqués + conv_id côté client)
+CONVS = {}  # key: conv_id -> list[{"role": "...", "content": "..."}]
 
 # =========================
 # PAGES
@@ -336,8 +361,11 @@ def inscription_page():
         profile = parse_contact_info(contact)
         bot_id = "avocat-001" if pack == "avocat" else ("medecin-003" if pack == "medecin" else "immo-002")
         base = BOTS[bot_id]
+
+        # public_id stable basé sur email+bot_key
         public_id = _gen_public_id(email or str(uuid.uuid4()), bot_id)
 
+        # upsert DB pour persister buyer_email et les params
         bot_db = {
             "public_id": public_id,
             "bot_key": bot_id,
@@ -378,7 +406,7 @@ def recap_page():
     bot = db_get_bot(public_id) if public_id else None
 
     if not bot:
-        # fallback pour dev
+        # fallback (dev)
         key = "avocat-001" if pack=="avocat" else ("medecin-003" if pack=="medecin" else "immo-002")
         base = BOTS[key]
         bot = {
@@ -391,7 +419,8 @@ def recap_page():
     owner     = bot.get("owner_name") or ""
     full_name = f"{display} — {owner}" if owner else display
 
-    return render_template("recap.html",
+    return render_template(
+        "recap.html",
         base_url=BASE_URL,
         pack=pack,
         public_id=bot.get("public_id") or "",
@@ -401,13 +430,13 @@ def recap_page():
 
 @app.route("/chat")
 def chat_page():
-    # Iframe Wix : /chat?public_id=...&embed=1
+    # Iframe embarqué : /chat?public_id=...&embed=1
     public_id = (request.args.get("public_id") or "").strip()
     embed     = request.args.get("embed", "0") == "1"
 
     bot = db_get_bot(public_id)
     if not bot:
-        # fallback dev
+        # fallback: première dispo (dev)
         base = BOTS["avocat-001"]
         bot = {
             "public_id": public_id or "avocat-001-demo",
@@ -424,7 +453,8 @@ def chat_page():
     owner = bot.get("owner_name") or "Client"
     full_name = f"{display_name} — {owner}" if owner else display_name
 
-    return render_template("chat.html",
+    return render_template(
+        "chat.html",
         title="Betty — Chat",
         base_url=BASE_URL,
         public_id=bot.get("public_id") or "",
@@ -448,18 +478,17 @@ def bettybot_reply():
     if not user_input:
         return jsonify({"response": "Dites-moi ce dont vous avez besoin 🙂"}), 200
 
-    # Bot depuis DB (automatique)
-    _, bot = find_bot_by_public_id(public_id)
+    bot_key, bot = find_bot_by_public_id(public_id)
     if not bot:
-        # ultra-fallback
-        base = BOTS["avocat-001"]
-        bot = {"pack": base["pack"], "name": base["name"], "buyer_email": None, "profile": {}, "greeting": ""}
+        # fallback par défaut
+        bot_key = "avocat-001"
+        bot = BOTS[bot_key]
 
     # Historique : conv_id (localStorage) > cookies Flask
     if conv_id:
         history = CONVS.get(conv_id, [])
     else:
-        key = f"conv_{public_id or 'default'}"
+        key = f"conv_{public_id or bot_key}"
         history = session.get(key, [])
     history = history[-6:]
 
@@ -473,13 +502,19 @@ def bettybot_reply():
     if conv_id:
         CONVS[conv_id] = history
     else:
-        session[f"conv_{public_id or 'default'}"] = history
+        session[f"conv_{public_id or bot_key}"] = history
 
-    # Envoi lead quand ready -> email d’inscription résolu via DB
-    if lead and isinstance(lead, dict) and lead.get("stage") == "ready":
-        recipient = bot.get("buyer_email")
-        if recipient:
-            send_lead_email(recipient, lead, bot_name=bot.get("name") or "Betty Bot")
+    # Envoi lead quand ready -> envoyé à l'email d'inscription (DB)
+    if lead and isinstance(lead, dict):
+        stage_ok = False
+        if bot.get("pack") == "medecin":
+            stage_ok = (lead.get("stage") == "ready" and bool(lead.get("email")) and bool(lead.get("name")) and bool(lead.get("reason")))
+        else:
+            stage_ok = (lead.get("stage") == "ready" and bool(lead.get("name")) and bool(lead.get("reason")) and (lead.get("email") or lead.get("phone")))
+        if stage_ok:
+            buyer_email = bot.get("buyer_email")
+            if buyer_email:
+                send_lead_email(buyer_email, lead, bot_name=bot.get("name") or "Betty Bot")
 
     return jsonify({"response": response_text})
 
@@ -511,7 +546,6 @@ def reset_conv():
         CONVS.pop(key, None)
     return jsonify({"ok": True})
 
-# Local dev
 if __name__ == "__main__":
     # Dev local : mettre SESSION_SECURE=False pour autoriser cookies non-HTTPS
     app.run(host="0.0.0.0", port=5000, debug=True)
