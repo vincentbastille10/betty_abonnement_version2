@@ -1,16 +1,17 @@
 # app.py
+from __future__ import annotations
 from flask import Flask, render_template, request, jsonify, redirect, url_for, session
 import os, yaml, requests, re, stripe, json, uuid, hashlib, sqlite3
 from pathlib import Path
 from contextlib import contextmanager
 
-app = Flask(__name__)
+app = Flask(__name__, template_folder="templates", static_folder="static")
 app.secret_key = os.getenv("FLASK_SECRET_KEY", "dev-secret-change-me")
 
-# --- Cookies compat iframe (Wix / domaines tiers) ---
+# ---- Cookies compat iframe (Wix / domaines tiers)
 SESSION_SECURE = os.getenv("SESSION_SECURE", "true").lower() == "true"
 app.config.update(
-    SESSION_COOKIE_SAMESITE='None',
+    SESSION_COOKIE_SAMESITE="None",
     SESSION_COOKIE_SECURE=SESSION_SECURE
 )
 
@@ -25,30 +26,37 @@ LLM_MAX_TOKENS = int(os.getenv("LLM_MAX_TOKENS", "180"))
 stripe.api_key = os.getenv("STRIPE_SECRET_KEY", "").strip()
 PRICE_ID = os.getenv("STRIPE_PRICE_ID", "").strip()  # 29,99 €/mois
 
-BASE_URL = (os.getenv("BASE_URL", "http://127.0.0.1:5000")).rstrip("/")
+BASE_URL = (os.getenv("BASE_URL", "https://betty-abonnement-version2.vercel.app")).rstrip("/")
 
-# Mailjet pour l'envoi des leads
+# Mailjet
 MJ_API_KEY    = os.getenv("MJ_API_KEY", "").strip()
 MJ_API_SECRET = os.getenv("MJ_API_SECRET", "").strip()
 MJ_FROM_EMAIL = os.getenv("MJ_FROM_EMAIL", "no-reply@spectramedia.ai").strip()
 MJ_FROM_NAME  = os.getenv("MJ_FROM_NAME", "Spectra Media AI").strip()
 
-app.jinja_env.globals['BASE_URL'] = BASE_URL
+app.jinja_env.globals["BASE_URL"] = BASE_URL
 
 # =========================
-# DB SQLite (persistant)
+# DB SQLite — /tmp en serverless
 # =========================
 def pick_db_path() -> Path:
-    p = os.getenv("DB_PATH", "data/app.db")
-    p = Path(p)
-    p.parent.mkdir(parents=True, exist_ok=True)
+    env_forced = os.getenv("DB_PATH")
+    if env_forced:
+        p = Path(env_forced)
+    else:
+        is_serverless = bool(os.getenv("VERCEL") or os.getenv("AWS_LAMBDA_FUNCTION_VERSION"))
+        p = Path("/tmp/bots.db") if is_serverless else Path("data/app.db")
+    try:
+        p.parent.mkdir(parents=True, exist_ok=True)
+    except Exception:
+        pass
     return p
 
 DB_PATH = pick_db_path()
 
 @contextmanager
 def db_connect():
-    con = sqlite3.connect(DB_PATH)
+    con = sqlite3.connect(str(DB_PATH))
     con.row_factory = sqlite3.Row
     try:
         yield con
@@ -69,8 +77,7 @@ def db_init():
             buyer_email  TEXT,
             owner_name   TEXT,
             profile_json TEXT
-        )
-        """)
+        )""")
         con.commit()
 
 def db_upsert_bot(bot: dict):
@@ -79,14 +86,14 @@ def db_upsert_bot(bot: dict):
         INSERT INTO bots(public_id, bot_key, pack, name, color, avatar_file, greeting, buyer_email, owner_name, profile_json)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(public_id) DO UPDATE SET
-            pack=excluded.pack,
-            name=excluded.name,
-            color=excluded.color,
-            avatar_file=excluded.avatar_file,
-            greeting=excluded.greeting,
-            buyer_email=excluded.buyer_email,
-            owner_name=excluded.owner_name,
-            profile_json=excluded.profile_json
+          pack=excluded.pack,
+          name=excluded.name,
+          color=excluded.color,
+          avatar_file=excluded.avatar_file,
+          greeting=excluded.greeting,
+          buyer_email=excluded.buyer_email,
+          owner_name=excluded.owner_name,
+          profile_json=excluded.profile_json
         """, (
             bot.get("public_id"),
             bot.get("bot_key"),
@@ -120,7 +127,7 @@ def db_get_bot(public_id: str):
 db_init()
 
 # =========================
-# HELPERS LLM / PROMPTS
+# HELPERS
 # =========================
 def static_url(filename: str) -> str:
     return url_for("static", filename=filename, _external=True)
@@ -157,28 +164,26 @@ def build_system_prompt(pack_name: str, profile: dict, greeting: str = "") -> st
 Tu es **Betty**, assistante {pack_name}. Objectif prioritaire : **QUALIFIER** le prospect puis **proposer un rendez-vous**.
 
 RÈGLES DE CONVERSATION (OBLIGATOIRES) :
-- Pose **UNE seule question** à la fois. 2 phrases max par message.
+- Pose **UNE** question à la fois (2 phrases max).
 - Oriente la qualification dès les 1ers échanges.
 - Champs à collecter (ordre conseillé) : **motif**, **email (OBLIGATOIRE)**, **téléphone**, **nom complet**, **disponibilités**.
-- Dès que tu as **motif + nom + email**, annonce : "Parfait, je transmets au cabinet pour vous proposer un créneau." et passe le stage à "ready".
-- Tu ne donnes pas d'avis juridique/médical ; tu orientes vers le pro.
-- **Ne te réinitialise jamais** en cours d’échange.
+- Dès que tu as **motif + nom + email**, dis : "Parfait, je transmets au cabinet pour vous proposer un créneau." et passe `stage:"ready"`.
+- Tu ne donnes pas d'avis médical ; tu orientes.
 
 RÈGLES SUPPLÉMENTAIRES (QUALIF LEAD) :
-- Ne JAMAIS afficher de variables ou placeholders (ex. {{Téléphone}}, {{Email}}). Pose des questions concrètes :
+- Pas de placeholders ({{Email}}). Pose des questions concrètes :
   1) "Quelle est votre adresse e-mail ?",
   2) "Quel est votre numéro de téléphone ?",
   3) "Quel est votre nom complet ?",
   4) Demander des disponibilités si utile.
-- N'affiche pas le JSON ci-dessous. Réponds normalement, puis ajoute juste la balise technique en dernière ligne.
+- N'affiche pas le JSON ci-dessous. Réponds normalement, puis ajoute juste la balise technique en **dernière ligne**.
 
 ### SORTIE LEAD JSON
-À CHAQUE message, ajoute en **dernière ligne** (sans texte avant/après, sans markdown) un tag :
+À CHAQUE message, ajoute en **dernière ligne** (sans texte avant/après) :
 <LEAD_JSON>{{"reason": "<motif ou ''>", "name": "<nom ou ''>", "email": "<email ou ''>", "phone": "<téléphone ou ''>", "availability": "<dispo ou ''>", "stage": "<collecting|ready>"}}</LEAD_JSON>
 
-- `stage = "ready"` **uniquement** si tu as **motif + nom + email**.
-- Sinon `stage = "collecting"`.
-- Le JSON doit être **une seule ligne** valide. Pas de retour à la ligne, pas de ``` ni autre balise.
+- `stage = "ready"` **uniquement** si **motif + nom + email** sont présents.
+- JSON **une seule ligne** valide (pas de ``` ni retours ligne).
 """
     greet = f"\nMessage d'accueil recommandé : {greeting}\n" if greeting else ""
     return f"{base}\n{biz}\n{guide}\n{greet}"
@@ -194,26 +199,18 @@ def call_llm_with_history(system_prompt: str, history: list, user_input: str) ->
     try:
         r = requests.post(TOGETHER_API_URL, headers=headers, json=payload, timeout=30)
         if not r.ok:
-            try:
-                err = r.json()
-            except Exception:
-                err = {"status": r.status_code, "text": r.text[:200]}
+            try: err = r.json()
+            except Exception: err = {"status": r.status_code, "text": r.text[:200]}
             return f"⚠️ Erreur Together: {err}"
         data = r.json()
-        content = (
-            data.get("choices", [{}])[0]
-                .get("message", {})
-                .get("content", "")
-                .strip()
-        )
+        content = data.get("choices", [{}])[0].get("message", {}).get("content", "").strip()
         return content or "Désolé, je n’ai pas pu générer de réponse."
     except Exception as e:
         print("[LLM ERROR]", type(e).__name__, e)
         return f"⚠️ Exception serveur: {type(e).__name__}: {e}"
 
 def parse_contact_info(text: str) -> dict:
-    if not text:
-        return {}
+    if not text: return {}
     d = {}
     m = re.search(r'(\+?\d[\d\s\.\-]{6,})', text);                   d["phone"]   = m.group(1) if m else None
     m = re.search(r'[\w\.-]+@[\w\.-]+\.\w+', text);                  d["email"]   = m.group(0) if m else None
@@ -225,11 +222,9 @@ def parse_contact_info(text: str) -> dict:
 LEAD_TAG_RE = re.compile(r"<LEAD_JSON>(\{.*?\})</LEAD_JSON>$")
 
 def extract_lead_json(text: str):
-    if not text:
-        return text, None
+    if not text: return text, None
     m = LEAD_TAG_RE.search(text)
-    if not m:
-        return text, None
+    if not m: return text, None
     lead_raw = m.group(1)
     message = text[:m.start()].rstrip()
     try:
@@ -260,18 +255,15 @@ def send_lead_email(to_email: str, lead: dict, bot_name: str = "Betty Bot"):
         }]
     }
     try:
-        r = requests.post(
-            "https://api.mailjet.com/v3.1/send",
-            auth=(MJ_API_KEY, MJ_API_SECRET),
-            json=payload,
-            timeout=15
-        )
+        r = requests.post("https://api.mailjet.com/v3.1/send",
+                          auth=(MJ_API_KEY, MJ_API_SECRET),
+                          json=payload, timeout=15)
         print("[LEAD][MAILJET]", "OK" if r.ok else f"KO {r.status_code} {r.text[:120]}")
     except Exception as e:
         print("[LEAD][MAILJET][EXC]", type(e).__name__, e)
 
 # =========================
-# MINI-DB mémoire (démo) + clés utilitaires
+# MINI-DB mémoire (seeds) + utilitaires
 # =========================
 BOTS = {
     "avocat-001":  {"pack":"avocat","name":"Betty Bot (Avocat)","color":"#4F46E5","avatar_file":"avocat.jpg","profile":{},"greeting":"","buyer_email":None,"owner_name":None,"public_id":None},
@@ -284,14 +276,12 @@ def _gen_public_id(email: str, bot_key: str) -> str:
     return f"{bot_key}-{h}"
 
 def find_bot_by_public_id(public_id: str):
-    """Retourne (bot_key, bot_dict_enrichi) en priorisant la DB; fallback mémoire."""
+    """DB prioritaire ; fallback mémoire."""
     if not public_id:
         return None, None
-    # 1) DB
     db_bot = db_get_bot(public_id)
     if db_bot:
         return db_bot.get("bot_key"), db_bot
-    # 2) mémoire (format "<bot_key>-<hash8>")
     parts = public_id.split("-")
     if len(parts) < 3:
         for k, b in BOTS.items():
@@ -301,13 +291,12 @@ def find_bot_by_public_id(public_id: str):
         return None, None
     bot_key = "-".join(parts[:2])
     b = BOTS.get(bot_key)
-    if not b:
-        return None, None
+    if not b: return None, None
     b2 = dict(b); b2["bot_key"] = bot_key; b2["public_id"] = public_id
     return bot_key, b2
 
-# Mémoire de conversations côté serveur (fallback si cookies bloqués + conv_id côté client)
-CONVS = {}  # key: conv_id -> list[{"role": "...", "content": "..."}]
+# Historique côté serveur (secours)
+CONVS = {}  # conv_id -> list(messages)
 
 # =========================
 # PAGES
@@ -346,39 +335,31 @@ def inscription_page():
 
         profile = parse_contact_info(contact)
         bot_id = "avocat-001" if pack == "avocat" else ("medecin-003" if pack == "medecin" else "immo-002")
-        bot = BOTS[bot_id]
-        bot["profile"]     = profile
-        bot["greeting"]    = greet
-        bot["color"]       = color
-        bot["avatar_file"] = avatar
-        bot["buyer_email"] = email
-        local_part = (email or "").split("@")[0] or "Client"
-        bot["owner_name"] = local_part.title()
+        base = BOTS[bot_id]
         public_id = _gen_public_id(email or str(uuid.uuid4()), bot_id)
-        bot["public_id"]  = public_id
 
-        # Enregistre en DB (persistance pour l'embed)
-        db_upsert_bot({
+        bot_db = {
             "public_id": public_id,
             "bot_key": bot_id,
-            "pack": bot["pack"],
-            "name": bot["name"],
-            "color": bot["color"],
-            "avatar_file": bot["avatar_file"],
-            "greeting": bot["greeting"],
-            "buyer_email": bot["buyer_email"],
-            "owner_name": bot["owner_name"],
-            "profile": bot["profile"],
-        })
+            "pack": base["pack"],
+            "name": base["name"],
+            "color": color or base["color"],
+            "avatar_file": avatar or base["avatar_file"],
+            "greeting": greet or "",
+            "buyer_email": email,
+            "owner_name": (email.split("@")[0].title() if email else "Client"),
+            "profile": profile,
+        }
+        db_upsert_bot(bot_db)
 
         if not stripe.api_key or not PRICE_ID:
-            return redirect(f"{BASE_URL}/recap?pack={pack}&session_id=fake_checkout_dev", code=303)
+            return redirect(f"{BASE_URL}/recap?pack={pack}&public_id={public_id}&session_id=fake_checkout_dev", code=303)
 
         session_obj = stripe.checkout.Session.create(
             mode="subscription",
             line_items=[{"price": PRICE_ID, "quantity": 1}],
             customer_email=email,
-            success_url=f"{BASE_URL}/recap?pack={pack}&session_id={{CHECKOUT_SESSION_ID}}",
+            success_url=f"{BASE_URL}/recap?pack={pack}&public_id={public_id}&session_id={{CHECKOUT_SESSION_ID}}",
             cancel_url=f"{BASE_URL}/inscription?pack={pack}&color={color}&avatar={avatar}",
             metadata={
                 "pack": pack, "color": color, "avatar": avatar,
@@ -393,45 +374,57 @@ def inscription_page():
 @app.route("/recap")
 def recap_page():
     pack = request.args.get("pack", "avocat")
-    bot_key = "avocat-001" if pack=="avocat" else ("medecin-003" if pack=="medecin" else "immo-002")
-    bot = BOTS.get(bot_key, {})
+    public_id = request.args.get("public_id", "").strip()
+    bot = db_get_bot(public_id) if public_id else None
 
-    public_id = bot.get("public_id")
-    owner     = bot.get("owner_name") or ""
+    if not bot:
+        # fallback pour dev
+        key = "avocat-001" if pack=="avocat" else ("medecin-003" if pack=="medecin" else "immo-002")
+        base = BOTS[key]
+        bot = {
+            "public_id": public_id or f"{key}-demo",
+            "name": base["name"],
+            "owner_name": "Client",
+        }
+
     display   = bot.get("name") or "Betty Bot"
+    owner     = bot.get("owner_name") or ""
+    full_name = f"{display} — {owner}" if owner else display
 
-    # overrides (dev)
-    public_id = request.args.get("public_id", public_id)
-    owner     = request.args.get("owner", owner)
-
-    return render_template(
-        "recap.html",
+    return render_template("recap.html",
         base_url=BASE_URL,
         pack=pack,
-        public_id=public_id or "",
-        full_name=(f"{display} — {owner}" if owner else display),
+        public_id=bot.get("public_id") or "",
+        full_name=full_name,
         title="Récapitulatif"
     )
 
 @app.route("/chat")
 def chat_page():
-    # Iframe embarqué : /chat?public_id=...&embed=1
+    # Iframe Wix : /chat?public_id=...&embed=1
     public_id = (request.args.get("public_id") or "").strip()
     embed     = request.args.get("embed", "0") == "1"
 
-    # On récupère les données du bot depuis la DB
-    _, bot = find_bot_by_public_id(public_id)
+    bot = db_get_bot(public_id)
     if not bot:
-        # fallback: première dispo
+        # fallback dev
         base = BOTS["avocat-001"]
-        bot = dict(base)
-        bot["public_id"] = "avocat-001-demo"
+        bot = {
+            "public_id": public_id or "avocat-001-demo",
+            "name": base["name"],
+            "color": base["color"],
+            "avatar_file": base["avatar_file"],
+            "greeting": "Bonjour, je suis Betty. Comment puis-je vous aider ?",
+            "owner_name": "Client",
+            "profile": {},
+            "pack": base["pack"]
+        }
 
     display_name = bot.get("name") or "Betty Bot"
     owner = bot.get("owner_name") or "Client"
     full_name = f"{display_name} — {owner}" if owner else display_name
-    return render_template(
-        "chat.html",
+
+    return render_template("chat.html",
         title="Betty — Chat",
         base_url=BASE_URL,
         public_id=bot.get("public_id") or "",
@@ -455,19 +448,18 @@ def bettybot_reply():
     if not user_input:
         return jsonify({"response": "Dites-moi ce dont vous avez besoin 🙂"}), 200
 
-    # Récup bot depuis DB (automatique) + fallback mémoire
-    bot_key, bot = find_bot_by_public_id(public_id)
+    # Bot depuis DB (automatique)
+    _, bot = find_bot_by_public_id(public_id)
     if not bot:
-        bot_key = "avocat-001"
-        base = BOTS[bot_key]
-        bot = dict(base)
-        bot["public_id"] = public_id or "avocat-001-demo"
+        # ultra-fallback
+        base = BOTS["avocat-001"]
+        bot = {"pack": base["pack"], "name": base["name"], "buyer_email": None, "profile": {}, "greeting": ""}
 
     # Historique : conv_id (localStorage) > cookies Flask
     if conv_id:
         history = CONVS.get(conv_id, [])
     else:
-        key = f"conv_{public_id or bot_key}"
+        key = f"conv_{public_id or 'default'}"
         history = session.get(key, [])
     history = history[-6:]
 
@@ -481,9 +473,9 @@ def bettybot_reply():
     if conv_id:
         CONVS[conv_id] = history
     else:
-        session[f"conv_{public_id or bot_key}"] = history
+        session[f"conv_{public_id or 'default'}"] = history
 
-    # Envoi lead quand ready → email propriétaire résolu AUTOMATIQUEMENT via DB
+    # Envoi lead quand ready -> email d’inscription résolu via DB
     if lead and isinstance(lead, dict) and lead.get("stage") == "ready":
         recipient = bot.get("buyer_email")
         if recipient:
@@ -519,6 +511,7 @@ def reset_conv():
         CONVS.pop(key, None)
     return jsonify({"ok": True})
 
+# Local dev
 if __name__ == "__main__":
     # Dev local : mettre SESSION_SECURE=False pour autoriser cookies non-HTTPS
     app.run(host="0.0.0.0", port=5000, debug=True)
