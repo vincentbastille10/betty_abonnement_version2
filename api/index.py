@@ -1,2 +1,2 @@
-# api/index.py
-from app import app  # <- ton objet Flask dans app.py s'appelle bien "app"
+# /api/index.py
+from app import app  # expose l'objet Flask "app" comme WSGI callable
