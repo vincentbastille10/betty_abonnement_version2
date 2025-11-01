@@ -26,7 +26,7 @@ PRICE_ID = os.getenv("STRIPE_PRICE_ID", "").strip()  # 29,99 €/mois
 
 BASE_URL = (os.getenv("BASE_URL", "http://127.0.0.1:5000")).rstrip("/")
 
-# Mailjet (ou SMTP) pour l'envoi des leads
+# Mailjet pour l'envoi des leads
 MJ_API_KEY    = os.getenv("MJ_API_KEY", "").strip()
 MJ_API_SECRET = os.getenv("MJ_API_SECRET", "").strip()
 MJ_FROM_EMAIL = os.getenv("MJ_FROM_EMAIL", "no-reply@spectramedia.ai").strip()
@@ -74,23 +74,24 @@ Tu es **Betty**, assistante {pack_name}. Objectif prioritaire : **QUALIFIER** le
 RÈGLES DE CONVERSATION (OBLIGATOIRES) :
 - Pose **UNE seule question** à la fois. 2 phrases max par message.
 - Oriente la qualification dès les 1ers échanges.
-- Champs à collecter (ordre conseillé) : **motif**, **téléphone** OU **email**, **nom complet**, **disponibilités**.
-- Dès que tu as **motif + nom + (email ou téléphone)**, annonce : "Parfait, je transmets au cabinet pour vous proposer un créneau." et passe le stage à "ready".
+- Champs à collecter (ordre conseillé) : **motif**, **email (OBLIGATOIRE)**, **téléphone**, **nom complet**, **disponibilités**.
+- Dès que tu as **motif + nom + email**, annonce : "Parfait, je transmets au cabinet pour vous proposer un créneau." et passe le stage à "ready".
 - Tu ne donnes pas d'avis juridique/médical ; tu orientes vers le pro.
 - **Ne te réinitialise jamais** en cours d’échange.
 
 RÈGLES SUPPLÉMENTAIRES (QUALIF LEAD) :
 - Ne JAMAIS afficher de variables ou placeholders (ex. {{Téléphone}}, {{Email}}). Pose des questions concrètes :
-  1) "Quel est votre numéro de téléphone ?" (ou "Quelle est votre adresse e-mail ?"),
-  2) "Quel est votre nom complet ?",
-  3) Demander des disponibilités si utile.
+  1) "Quelle est votre adresse e-mail ?",
+  2) "Quel est votre numéro de téléphone ?",
+  3) "Quel est votre nom complet ?",
+  4) Demander des disponibilités si utile.
 - N'affiche pas le JSON ci-dessous. Réponds normalement, puis ajoute juste la balise technique en dernière ligne.
 
 ### SORTIE LEAD JSON
 À CHAQUE message, ajoute en **dernière ligne** (sans texte avant/après, sans markdown) un tag :
 <LEAD_JSON>{{"reason": "<motif ou ''>", "name": "<nom ou ''>", "email": "<email ou ''>", "phone": "<téléphone ou ''>", "availability": "<dispo ou ''>", "stage": "<collecting|ready>"}}</LEAD_JSON>
 
-- `stage = "ready"` **uniquement** si tu as **motif + nom + (email ou téléphone)**.
+- `stage = "ready"` **uniquement** si tu as **motif + nom + email**.
 - Sinon `stage = "collecting"`.
 - Le JSON doit être **une seule ligne** valide. Pas de retour à la ligne, pas de ``` ni autre balise.
 """
@@ -305,14 +306,17 @@ def recap_page():
 
 @app.route("/chat")
 def chat_page():
-    # Iframe embarqué : /chat?public_id=...&embed=1
-    public_id = (request.args.get("public_id") or "").strip()
-    embed     = request.args.get("embed", "0") == "1"
+    # Iframe embarqué : /chat?public_id=...&embed=1&owner_email=...
+    public_id   = (request.args.get("public_id") or "").strip()
+    owner_email = (request.args.get("owner_email") or "").strip()
+    embed       = request.args.get("embed", "0") == "1"
+
     _, bot = find_bot_by_public_id(public_id)
     if not bot:
         # fallback: première dispo
         bot = BOTS["avocat-001"]
         public_id = bot.get("public_id") or "avocat-001-demo"
+
     display_name = bot.get("name") or "Betty Bot"
     owner = bot.get("owner_name") or "Client"
     full_name = f"{display_name} — {owner}" if owner else display_name
@@ -325,7 +329,8 @@ def chat_page():
         color=bot.get("color") or "#4F46E5",
         avatar_url=static_url(bot.get("avatar_file") or "avocat.jpg"),
         greeting=bot.get("greeting") or "Bonjour, je suis Betty. Comment puis-je vous aider ?",
-        embed=embed
+        embed=embed,
+        owner_email=owner_email  # exposé au template si besoin
     )
 
 # =========================
@@ -337,6 +342,7 @@ def bettybot_reply():
     user_input = (payload.get("message") or "").strip()
     public_id  = (payload.get("bot_id") or payload.get("public_id") or "").strip()
     conv_id    = (payload.get("conv_id") or "").strip()
+    owner_email_override = (payload.get("owner_email") or "").strip()  # <— Fallback pour Wix
 
     if not user_input:
         return jsonify({"response": "Dites-moi ce dont vous avez besoin 🙂"}), 200
@@ -367,11 +373,11 @@ def bettybot_reply():
     else:
         session[f"conv_{public_id or bot_key}"] = history
 
-    # Envoi lead quand ready (via email propriétaire défini à l'achat)
+    # Envoi lead quand ready : priorise l'email passé depuis l'iframe Wix, sinon buyer_email
     if lead and isinstance(lead, dict) and lead.get("stage") == "ready":
-        buyer_email = bot.get("buyer_email")
-        if buyer_email:
-            send_lead_email(buyer_email, lead, bot_name=bot["name"])
+        recipient = owner_email_override or bot.get("buyer_email")
+        if recipient:
+            send_lead_email(recipient, lead, bot_name=bot["name"])
 
     return jsonify({"response": response_text})
 
