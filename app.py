@@ -6,7 +6,7 @@ app = Flask(__name__)
 app.secret_key = os.getenv("FLASK_SECRET_KEY", "dev-secret-change-me")
 
 # --- Cookies compat iframe (Wix / domaines tiers) ---
-# En prod HTTPS : laisser True. En dev local http://, passe SECURE=False.
+# En prod HTTPS : laisser True. En dev local http://, passez SESSION_SECURE=False.
 SESSION_SECURE = os.getenv("SESSION_SECURE", "true").lower() == "true"
 app.config.update(
     SESSION_COOKIE_SAMESITE='None',
@@ -26,6 +26,7 @@ PRICE_ID = os.getenv("STRIPE_PRICE_ID", "").strip()  # 29,99 €/mois
 
 BASE_URL = (os.getenv("BASE_URL", "http://127.0.0.1:5000")).rstrip("/")
 
+# Mailjet (ou SMTP) pour l'envoi des leads
 MJ_API_KEY    = os.getenv("MJ_API_KEY", "").strip()
 MJ_API_SECRET = os.getenv("MJ_API_SECRET", "").strip()
 MJ_FROM_EMAIL = os.getenv("MJ_FROM_EMAIL", "no-reply@spectramedia.ai").strip()
@@ -157,12 +158,12 @@ def send_lead_email(to_email: str, lead: dict, bot_name: str = "Betty Bot"):
         return
     subject = f"Nouveau lead qualifié via {bot_name}"
     text = (
-        f"Motif        : {lead.get('reason','')}\n"
-        f"Nom          : {lead.get('name','')}\n"
-        f"Email        : {lead.get('email','')}\n"
-        f"Téléphone    : {lead.get('phone','')}\n"
-        f"Disponibilités : {lead.get('availability','')}\n"
-        f"Statut       : {lead.get('stage','')}\n"
+        f"Motif         : {lead.get('reason','')}\n"
+        f"Nom           : {lead.get('name','')}\n"
+        f"Email         : {lead.get('email','')}\n"
+        f"Téléphone     : {lead.get('phone','')}\n"
+        f"Disponibilités: {lead.get('availability','')}\n"
+        f"Statut        : {lead.get('stage','')}\n"
     )
     payload = {
         "Messages": [{
@@ -199,15 +200,15 @@ def _gen_public_id(email: str, bot_key: str) -> str:
 def find_bot_by_public_id(public_id: str):
     if not public_id:
         return None, None
-    # format attendu: "<bot_key>-<hash8>"
+    # format attendu: "<bot_key>-<hash8>" ex: "medecin-003-1a2b3c4d"
     parts = public_id.split("-")
     if len(parts) < 3:
-        # fallback: tente de matcher directement
+        # fallback: tentative de correspondance directe
         for k, b in BOTS.items():
             if b.get("public_id") == public_id:
                 return k, b
         return None, None
-    bot_key = "-".join(parts[:2])
+    bot_key = "-".join(parts[:2])  # "medecin-003"
     bot = BOTS.get(bot_key)
     return bot_key, bot
 
@@ -366,7 +367,7 @@ def bettybot_reply():
     else:
         session[f"conv_{public_id or bot_key}"] = history
 
-    # Envoi lead quand ready
+    # Envoi lead quand ready (via email propriétaire défini à l'achat)
     if lead and isinstance(lead, dict) and lead.get("stage") == "ready":
         buyer_email = bot.get("buyer_email")
         if buyer_email:
