@@ -1,7 +1,7 @@
 # app.py
 from __future__ import annotations
 from flask import Flask, render_template, request, jsonify, redirect, url_for, session
-import os, yaml, requests, re, stripe, json, uuid, hashlib, sqlite3
+import os, yaml, requests, re, stripe, json, uuid, hashlib, sqlite3, time
 from pathlib import Path
 from contextlib import contextmanager
 
@@ -38,27 +38,51 @@ app.jinja_env.globals['BASE_URL'] = BASE_URL
 # =========================
 # DB SQLite (persistant) — /tmp en serverless, data/app.db en local
 # =========================
+def _writable_dir(p: Path) -> bool:
+    try:
+        p.mkdir(parents=True, exist_ok=True)
+        test = p / ".w"
+        with open(test, "w") as f:
+            f.write("1")
+        test.unlink(missing_ok=True)
+        return True
+    except Exception:
+        return False
+
 def pick_db_path() -> Path:
+    # priorité à DB_PATH si fourni
     env_forced = os.getenv("DB_PATH")
     if env_forced:
         p = Path(env_forced)
-    else:
-        is_serverless = bool(os.getenv("VERCEL") or os.getenv("AWS_LAMBDA_FUNCTION_VERSION"))
-        p = Path("/tmp/bots.db") if is_serverless else Path("data/app.db")
-    try:
-        p.parent.mkdir(parents=True, exist_ok=True)
-    except Exception:
-        pass
-    return p
+        if _writable_dir(p.parent):
+            return p
+
+    # serverless → /tmp est garanti en écriture
+    if os.getenv("VERCEL") or os.getenv("AWS_LAMBDA_FUNCTION_VERSION"):
+        tmpdir = Path(os.getenv("TMPDIR", "/tmp"))
+        p = tmpdir / "bots.db"
+        if _writable_dir(tmpdir):
+            return p
+
+    # local/dev → ./data/app.db (crée le dossier si besoin)
+    data = Path(__file__).resolve().parent / "data"
+    if _writable_dir(data):
+        return data / "app.db"
+
+    # dernier recours → /tmp
+    return Path("/tmp/bots.db")
 
 DB_PATH = pick_db_path()
 
 @contextmanager
 def db_connect():
-    con = sqlite3.connect(str(DB_PATH))
+    con = sqlite3.connect(str(DB_PATH), timeout=10, check_same_thread=False)
     con.row_factory = sqlite3.Row
     try:
+        con.execute("PRAGMA journal_mode=WAL;")
+        con.execute("PRAGMA synchronous=NORMAL;")
         yield con
+        con.commit()
     finally:
         con.close()
 
@@ -66,34 +90,40 @@ def db_init():
     with db_connect() as con:
         con.execute("""
         CREATE TABLE IF NOT EXISTS bots (
-            public_id    TEXT PRIMARY KEY,
-            bot_key      TEXT NOT NULL,
-            pack         TEXT NOT NULL,
-            name         TEXT,
-            color        TEXT,
-            avatar_file  TEXT,
-            greeting     TEXT,
-            buyer_email  TEXT,
-            owner_name   TEXT,
-            profile_json TEXT
-        )
+            public_id     TEXT PRIMARY KEY,
+            bot_key       TEXT NOT NULL,
+            pack          TEXT NOT NULL,
+            name          TEXT,
+            color         TEXT,
+            avatar_file   TEXT,
+            greeting      TEXT,
+            buyer_email   TEXT,
+            owner_name    TEXT,
+            profile_json  TEXT,
+            created_at    INTEGER,
+            updated_at    INTEGER
+        );
         """)
-        con.commit()
+db_init()
+
+def _now() -> int:
+    return int(time.time())
 
 def db_upsert_bot(bot: dict):
     with db_connect() as con:
         con.execute("""
-        INSERT INTO bots(public_id, bot_key, pack, name, color, avatar_file, greeting, buyer_email, owner_name, profile_json)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO bots(public_id, bot_key, pack, name, color, avatar_file, greeting, buyer_email, owner_name, profile_json, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(public_id) DO UPDATE SET
-          pack=excluded.pack,
-          name=excluded.name,
-          color=excluded.color,
-          avatar_file=excluded.avatar_file,
-          greeting=excluded.greeting,
-          buyer_email=excluded.buyer_email,
-          owner_name=excluded.owner_name,
-          profile_json=excluded.profile_json
+            pack=excluded.pack,
+            name=excluded.name,
+            color=excluded.color,
+            avatar_file=excluded.avatar_file,
+            greeting=excluded.greeting,
+            buyer_email=excluded.buyer_email,
+            owner_name=excluded.owner_name,
+            profile_json=excluded.profile_json,
+            updated_at=excluded.updated_at
         """, (
             bot.get("public_id"),
             bot.get("bot_key"),
@@ -104,9 +134,9 @@ def db_upsert_bot(bot: dict):
             bot.get("greeting"),
             bot.get("buyer_email"),
             bot.get("owner_name"),
-            json.dumps(bot.get("profile") or {}, ensure_ascii=False)
+            json.dumps(bot.get("profile") or {}, ensure_ascii=False),
+            _now(), _now()
         ))
-        con.commit()
 
 def db_get_bot(public_id: str):
     if not public_id:
@@ -123,9 +153,6 @@ def db_get_bot(public_id: str):
         except Exception:
             d["profile"] = {}
     return d
-
-# init DB au cold start
-db_init()
 
 # =========================
 # HELPERS
@@ -162,7 +189,7 @@ def build_system_prompt(pack_name: str, profile: dict, greeting: str = "") -> st
     base = load_pack_prompt(pack_name)
     biz  = build_business_block(profile)
 
-    # Règles spécifiques : pour le pack "medecin", l'EMAIL PATIENT est OBLIGATOIRE avant stage=ready
+    # Pack médecin : email patient obligatoire avant stage=ready
     if pack_name == "medecin":
         qualif_order = "**motif**, **email (OBLIGATOIRE)**, **téléphone**, **nom complet**, **disponibilités**"
         ready_rule   = '— `stage = "ready"` uniquement si **motif + nom + email**.'
@@ -237,7 +264,7 @@ def parse_contact_info(text: str) -> dict:
     m = re.search(r'(nom|cabinet|agence)\s*:\s*(.+)', text, re.I);   d["name"]    = m.group(2).strip() if m else None
     return {k: v for k, v in d.items() if v}
 
-LEAD_TAG_RE = re.compile(r"<LEAD_JSON>(\{.*?\})</LEAD_JSON>$")
+LEAD_TAG_RE = re.compile(r"<LEAD_JSON>(\{.*?\})</LEAD_JSON>\s*$")
 
 def extract_lead_json(text: str):
     if not text:
@@ -286,7 +313,7 @@ def send_lead_email(to_email: str, lead: dict, bot_name: str = "Betty Bot"):
         print("[LEAD][MAILJET][EXC]", type(e).__name__, e)
 
 # =========================
-# MINI-DB (seed mémoire pour defaults)
+# DEFAULT BOTS (seed mémoire pour dev)
 # =========================
 BOTS = {
     "avocat-001":  {"pack":"avocat","name":"Betty Bot (Avocat)","color":"#4F46E5","avatar_file":"avocat.jpg","profile":{},"greeting":"","buyer_email":None,"owner_name":None,"public_id":None},
@@ -480,7 +507,7 @@ def bettybot_reply():
 
     bot_key, bot = find_bot_by_public_id(public_id)
     if not bot:
-        # fallback par défaut
+        # fallback par défaut (dev)
         bot_key = "avocat-001"
         bot = BOTS[bot_key]
 
@@ -506,7 +533,6 @@ def bettybot_reply():
 
     # Envoi lead quand ready -> envoyé à l'email d'inscription (DB)
     if lead and isinstance(lead, dict):
-        stage_ok = False
         if bot.get("pack") == "medecin":
             stage_ok = (lead.get("stage") == "ready" and bool(lead.get("email")) and bool(lead.get("name")) and bool(lead.get("reason")))
         else:
