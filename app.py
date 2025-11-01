@@ -1,12 +1,13 @@
 # app.py
 from flask import Flask, render_template, request, jsonify, redirect, url_for, session
-import os, yaml, requests, re, stripe, json, uuid, hashlib
+import os, yaml, requests, re, stripe, json, uuid, hashlib, sqlite3
+from pathlib import Path
+from contextlib import contextmanager
 
 app = Flask(__name__)
 app.secret_key = os.getenv("FLASK_SECRET_KEY", "dev-secret-change-me")
 
 # --- Cookies compat iframe (Wix / domaines tiers) ---
-# En prod HTTPS : laisser True. En dev local http://, passez SESSION_SECURE=False.
 SESSION_SECURE = os.getenv("SESSION_SECURE", "true").lower() == "true"
 app.config.update(
     SESSION_COOKIE_SAMESITE='None',
@@ -35,7 +36,91 @@ MJ_FROM_NAME  = os.getenv("MJ_FROM_NAME", "Spectra Media AI").strip()
 app.jinja_env.globals['BASE_URL'] = BASE_URL
 
 # =========================
-# HELPERS
+# DB SQLite (persistant)
+# =========================
+def pick_db_path() -> Path:
+    p = os.getenv("DB_PATH", "data/app.db")
+    p = Path(p)
+    p.parent.mkdir(parents=True, exist_ok=True)
+    return p
+
+DB_PATH = pick_db_path()
+
+@contextmanager
+def db_connect():
+    con = sqlite3.connect(DB_PATH)
+    con.row_factory = sqlite3.Row
+    try:
+        yield con
+    finally:
+        con.close()
+
+def db_init():
+    with db_connect() as con:
+        con.execute("""
+        CREATE TABLE IF NOT EXISTS bots (
+            public_id    TEXT PRIMARY KEY,
+            bot_key      TEXT NOT NULL,
+            pack         TEXT NOT NULL,
+            name         TEXT,
+            color        TEXT,
+            avatar_file  TEXT,
+            greeting     TEXT,
+            buyer_email  TEXT,
+            owner_name   TEXT,
+            profile_json TEXT
+        )
+        """)
+        con.commit()
+
+def db_upsert_bot(bot: dict):
+    with db_connect() as con:
+        con.execute("""
+        INSERT INTO bots(public_id, bot_key, pack, name, color, avatar_file, greeting, buyer_email, owner_name, profile_json)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(public_id) DO UPDATE SET
+            pack=excluded.pack,
+            name=excluded.name,
+            color=excluded.color,
+            avatar_file=excluded.avatar_file,
+            greeting=excluded.greeting,
+            buyer_email=excluded.buyer_email,
+            owner_name=excluded.owner_name,
+            profile_json=excluded.profile_json
+        """, (
+            bot.get("public_id"),
+            bot.get("bot_key"),
+            bot.get("pack"),
+            bot.get("name"),
+            bot.get("color"),
+            bot.get("avatar_file"),
+            bot.get("greeting"),
+            bot.get("buyer_email"),
+            bot.get("owner_name"),
+            json.dumps(bot.get("profile") or {}, ensure_ascii=False)
+        ))
+        con.commit()
+
+def db_get_bot(public_id: str):
+    if not public_id:
+        return None
+    with db_connect() as con:
+        row = con.execute("SELECT * FROM bots WHERE public_id = ? LIMIT 1", (public_id,)).fetchone()
+    if not row:
+        return None
+    d = dict(row)
+    d["profile"] = {}
+    if d.get("profile_json"):
+        try:
+            d["profile"] = json.loads(d["profile_json"])
+        except Exception:
+            d["profile"] = {}
+    return d
+
+db_init()
+
+# =========================
+# HELPERS LLM / PROMPTS
 # =========================
 def static_url(filename: str) -> str:
     return url_for("static", filename=filename, _external=True)
@@ -186,7 +271,7 @@ def send_lead_email(to_email: str, lead: dict, bot_name: str = "Betty Bot"):
         print("[LEAD][MAILJET][EXC]", type(e).__name__, e)
 
 # =========================
-# MINI-DB (démo)
+# MINI-DB mémoire (démo) + clés utilitaires
 # =========================
 BOTS = {
     "avocat-001":  {"pack":"avocat","name":"Betty Bot (Avocat)","color":"#4F46E5","avatar_file":"avocat.jpg","profile":{},"greeting":"","buyer_email":None,"owner_name":None,"public_id":None},
@@ -199,19 +284,27 @@ def _gen_public_id(email: str, bot_key: str) -> str:
     return f"{bot_key}-{h}"
 
 def find_bot_by_public_id(public_id: str):
+    """Retourne (bot_key, bot_dict_enrichi) en priorisant la DB; fallback mémoire."""
     if not public_id:
         return None, None
-    # format attendu: "<bot_key>-<hash8>" ex: "medecin-003-1a2b3c4d"
+    # 1) DB
+    db_bot = db_get_bot(public_id)
+    if db_bot:
+        return db_bot.get("bot_key"), db_bot
+    # 2) mémoire (format "<bot_key>-<hash8>")
     parts = public_id.split("-")
     if len(parts) < 3:
-        # fallback: tentative de correspondance directe
         for k, b in BOTS.items():
             if b.get("public_id") == public_id:
-                return k, b
+                b2 = dict(b); b2["bot_key"] = k; b2["public_id"] = public_id
+                return k, b2
         return None, None
-    bot_key = "-".join(parts[:2])  # "medecin-003"
-    bot = BOTS.get(bot_key)
-    return bot_key, bot
+    bot_key = "-".join(parts[:2])
+    b = BOTS.get(bot_key)
+    if not b:
+        return None, None
+    b2 = dict(b); b2["bot_key"] = bot_key; b2["public_id"] = public_id
+    return bot_key, b2
 
 # Mémoire de conversations côté serveur (fallback si cookies bloqués + conv_id côté client)
 CONVS = {}  # key: conv_id -> list[{"role": "...", "content": "..."}]
@@ -261,7 +354,22 @@ def inscription_page():
         bot["buyer_email"] = email
         local_part = (email or "").split("@")[0] or "Client"
         bot["owner_name"] = local_part.title()
-        bot["public_id"]  = _gen_public_id(email or str(uuid.uuid4()), bot_id)
+        public_id = _gen_public_id(email or str(uuid.uuid4()), bot_id)
+        bot["public_id"]  = public_id
+
+        # Enregistre en DB (persistance pour l'embed)
+        db_upsert_bot({
+            "public_id": public_id,
+            "bot_key": bot_id,
+            "pack": bot["pack"],
+            "name": bot["name"],
+            "color": bot["color"],
+            "avatar_file": bot["avatar_file"],
+            "greeting": bot["greeting"],
+            "buyer_email": bot["buyer_email"],
+            "owner_name": bot["owner_name"],
+            "profile": bot["profile"],
+        })
 
         if not stripe.api_key or not PRICE_ID:
             return redirect(f"{BASE_URL}/recap?pack={pack}&session_id=fake_checkout_dev", code=303)
@@ -275,7 +383,8 @@ def inscription_page():
             metadata={
                 "pack": pack, "color": color, "avatar": avatar,
                 "greeting": greet, "contact_info": contact,
-                "persona_x": px, "persona_y": py
+                "persona_x": px, "persona_y": py,
+                "public_id": public_id
             }
         )
         return redirect(session_obj.url, code=303)
@@ -306,16 +415,17 @@ def recap_page():
 
 @app.route("/chat")
 def chat_page():
-    # Iframe embarqué : /chat?public_id=...&embed=1&owner_email=...
-    public_id   = (request.args.get("public_id") or "").strip()
-    owner_email = (request.args.get("owner_email") or "").strip()
-    embed       = request.args.get("embed", "0") == "1"
+    # Iframe embarqué : /chat?public_id=...&embed=1
+    public_id = (request.args.get("public_id") or "").strip()
+    embed     = request.args.get("embed", "0") == "1"
 
+    # On récupère les données du bot depuis la DB
     _, bot = find_bot_by_public_id(public_id)
     if not bot:
         # fallback: première dispo
-        bot = BOTS["avocat-001"]
-        public_id = bot.get("public_id") or "avocat-001-demo"
+        base = BOTS["avocat-001"]
+        bot = dict(base)
+        bot["public_id"] = "avocat-001-demo"
 
     display_name = bot.get("name") or "Betty Bot"
     owner = bot.get("owner_name") or "Client"
@@ -324,13 +434,12 @@ def chat_page():
         "chat.html",
         title="Betty — Chat",
         base_url=BASE_URL,
-        public_id=public_id,
+        public_id=bot.get("public_id") or "",
         full_name=full_name,
         color=bot.get("color") or "#4F46E5",
         avatar_url=static_url(bot.get("avatar_file") or "avocat.jpg"),
         greeting=bot.get("greeting") or "Bonjour, je suis Betty. Comment puis-je vous aider ?",
-        embed=embed,
-        owner_email=owner_email  # exposé au template si besoin
+        embed=embed
     )
 
 # =========================
@@ -342,16 +451,17 @@ def bettybot_reply():
     user_input = (payload.get("message") or "").strip()
     public_id  = (payload.get("bot_id") or payload.get("public_id") or "").strip()
     conv_id    = (payload.get("conv_id") or "").strip()
-    owner_email_override = (payload.get("owner_email") or "").strip()  # <— Fallback pour Wix
 
     if not user_input:
         return jsonify({"response": "Dites-moi ce dont vous avez besoin 🙂"}), 200
 
+    # Récup bot depuis DB (automatique) + fallback mémoire
     bot_key, bot = find_bot_by_public_id(public_id)
     if not bot:
-        # fallback par défaut
         bot_key = "avocat-001"
-        bot = BOTS[bot_key]
+        base = BOTS[bot_key]
+        bot = dict(base)
+        bot["public_id"] = public_id or "avocat-001-demo"
 
     # Historique : conv_id (localStorage) > cookies Flask
     if conv_id:
@@ -361,7 +471,7 @@ def bettybot_reply():
         history = session.get(key, [])
     history = history[-6:]
 
-    system_prompt = build_system_prompt(bot["pack"], bot.get("profile", {}), bot.get("greeting", ""))
+    system_prompt = build_system_prompt(bot.get("pack", "avocat"), bot.get("profile", {}), bot.get("greeting", ""))
     full_text = call_llm_with_history(system_prompt=system_prompt, history=history, user_input=user_input)
     response_text, lead = extract_lead_json(full_text)
 
@@ -373,11 +483,11 @@ def bettybot_reply():
     else:
         session[f"conv_{public_id or bot_key}"] = history
 
-    # Envoi lead quand ready : priorise l'email passé depuis l'iframe Wix, sinon buyer_email
+    # Envoi lead quand ready → email propriétaire résolu AUTOMATIQUEMENT via DB
     if lead and isinstance(lead, dict) and lead.get("stage") == "ready":
-        recipient = owner_email_override or bot.get("buyer_email")
+        recipient = bot.get("buyer_email")
         if recipient:
-            send_lead_email(recipient, lead, bot_name=bot["name"])
+            send_lead_email(recipient, lead, bot_name=bot.get("name") or "Betty Bot")
 
     return jsonify({"response": response_text})
 
