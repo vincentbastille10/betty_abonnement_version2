@@ -30,7 +30,7 @@ BASE_URL = (os.getenv("BASE_URL", "http://127.0.0.1:5000")).rstrip("/")
 
 MJ_API_KEY    = os.getenv("MJ_API_KEY", "").strip()
 MJ_API_SECRET = os.getenv("MJ_API_SECRET", "").strip()
-MJ_FROM_EMAIL = os.getenv("MJ_FROM_EMAIL", "no-reply@spectramedia.ai").strip()
+MJ_FROM_EMAIL = os.getenv("MJ_FROM_EMAIL", "no-reply@spectramedia.online").strip()
 MJ_FROM_NAME  = os.getenv("MJ_FROM_NAME", "Spectra Media AI").strip()
 
 app.jinja_env.globals["BASE_URL"] = BASE_URL
