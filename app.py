@@ -612,6 +612,25 @@ def reset_conv():
         CONVS.pop(key, None)
     return jsonify({"ok": True})
 
+# --- TEST MAILJET (diagnostic simple) ---
+@app.route("/api/test_mailjet")
+def test_mailjet():
+    to = (request.args.get("to") or os.getenv("TEST_TO_EMAIL") or "").strip()
+    if not to:
+        return jsonify({"ok": False, "error": "missing 'to' param"}), 400
+
+    # payload de test minimal
+    lead = {
+        "reason": "Test automatique",
+        "name": "Lead Test",
+        "email": "lead@example.com",
+        "phone": "+33000000000",
+        "availability": "demain 10h",
+        "stage": "ready",
+    }
+    send_lead_email(to, lead, bot_name="Betty Bot (test)")
+    return jsonify({"ok": True, "to": to})
+
 if __name__ == "__main__":
     # Dev local : mettre SESSION_SECURE=False pour autoriser cookies non-HTTPS
     app.run(host="0.0.0.0", port=5000, debug=True)
