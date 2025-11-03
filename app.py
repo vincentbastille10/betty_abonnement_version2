@@ -11,7 +11,7 @@ app.secret_key = os.getenv("FLASK_SECRET_KEY", "dev-secret-change-me")
 # --- Cookies compat iframe (Wix / domaines tiers) ---
 SESSION_SECURE = os.getenv("SESSION_SECURE", "true").lower() == "true"
 app.config.update(
-    SESSION_COOKIE_SAMESITE='None',
+    SESSION_COOKIE_SAMESITE="None",
     SESSION_COOKIE_SECURE=SESSION_SECURE
 )
 
@@ -33,7 +33,7 @@ MJ_API_SECRET = os.getenv("MJ_API_SECRET", "").strip()
 MJ_FROM_EMAIL = os.getenv("MJ_FROM_EMAIL", "no-reply@spectramedia.ai").strip()
 MJ_FROM_NAME  = os.getenv("MJ_FROM_NAME", "Spectra Media AI").strip()
 
-app.jinja_env.globals['BASE_URL'] = BASE_URL
+app.jinja_env.globals["BASE_URL"] = BASE_URL
 
 # =========================
 # DB SQLite (persistant) — /tmp en serverless, data/app.db en local
@@ -134,7 +134,7 @@ def static_url(filename: str) -> str:
     return url_for("static", filename=filename, _external=True)
 
 def load_pack_prompt(pack_name: str) -> str:
-    path = f"data/packs/{pack_name}.yaml"
+    path = f"data/packs/{(pack_name or '').lower()}.yaml"
     if not os.path.exists(path):
         return (
             "Tu es une assistante AI professionnelle. "
@@ -142,7 +142,7 @@ def load_pack_prompt(pack_name: str) -> str:
             "et de proposer un rendez-vous avec le professionnel si pertinent. "
             "Reste concise, polie, en français. Ne donne pas d'avis juridique/médical : oriente."
         )
-    with open(path, "r") as f:
+    with open(path, "r", encoding="utf-8") as f:
         data = yaml.safe_load(f) or {}
     return data.get("prompt", "Tu es une assistante AI professionnelle.")
 
@@ -162,38 +162,32 @@ def build_system_prompt(pack_name: str, profile: dict, greeting: str = "") -> st
     base = load_pack_prompt(pack_name)
     biz  = build_business_block(profile)
 
-    # Règles spécifiques : pour le pack "medecin", l'EMAIL PATIENT est OBLIGATOIRE avant stage=ready
-    if pack_name == "medecin":
-        qualif_order = "**motif**, **email (OBLIGATOIRE)**, **téléphone**, **nom complet**, **disponibilités**"
-        ready_rule   = '— `stage = "ready"` uniquement si **motif + nom + email**.'
+    # Règles de qualification selon le métier
+    if (pack_name or "").lower() == "medecin":
+        qualif_order = "1) motif, 2) **email (OBLIGATOIRE)**, 3) nom complet, 4) téléphone (facultatif), 5) disponibilités"
+        ready_rule   = '— `stage="ready"` UNIQUEMENT si **motif + nom + email**.'
     else:
-        qualif_order = "**motif**, **téléphone** OU **email**, **nom complet**, **disponibilités**"
-        ready_rule   = '— `stage = "ready"` uniquement si **motif + nom + (email ou téléphone)**.'
+        qualif_order = "1) motif, 2) téléphone **ou** e-mail (choisir l’un), 3) nom complet, 4) disponibilités"
+        ready_rule   = '— `stage="ready"` UNIQUEMENT si **motif + nom + (email ou téléphone)**.'
 
     guide = f"""
-Tu es **Betty**, assistante {pack_name}. Objectif prioritaire : **QUALIFIER** le prospect puis **proposer un rendez-vous**.
+Tu es **Betty**, assistante {pack_name}. Ta mission : **qualifier** le prospect puis **clôturer**.
 
-RÈGLES DE CONVERSATION (OBLIGATOIRES) :
-- Pose **UNE seule question** à la fois. 2 phrases max par message.
-- Oriente la qualification dès les 1ers échanges.
-- Champs à collecter (ordre conseillé) : {qualif_order}
-- Dès que les conditions sont réunies, annonce : "Parfait, je transmets au cabinet pour vous proposer un créneau." et passe le stage à "ready".
-- Tu ne donnes pas d'avis juridique/médical ; tu orientes vers le pro.
-- **Ne te réinitialise jamais** en cours d’échange.
+CONDUITE STRICTE :
+- Réponses **très courtes** (1–2 phrases).
+- **Une seule question** à la fois.
+- **Jamais** d’explications générales, ni d’adresse/numéro du cabinet pendant la collecte.
+- Ordre impératif de collecte : {qualif_order}
+{ready_rule}
 
-RÈGLES SUPPLÉMENTAIRES (QUALIF LEAD) :
-- Ne JAMAIS afficher de variables ou placeholders (ex. {{Téléphone}}, {{Email}}). Pose des questions concrètes :
-  1) "Quel est votre numéro de téléphone ?" (ou "Quelle est votre adresse e-mail ?"),
-  2) "Quel est votre nom complet ?",
-  3) Demander des disponibilités si utile.
-- N'affiche pas le JSON ci-dessous. Réponds normalement, puis ajoute juste la balise technique en dernière ligne.
+RÈGLES SUPPLÉMENTAIRES :
+- **Interdiction** d’afficher des variables (ex. {{Téléphone}}) ou le JSON ci-dessous.
+- Quand les conditions sont réunies, écris une courte **phrase de clôture** (“Parfait, je transmets au cabinet…”) et passe le stage à **ready**.
 
 ### SORTIE LEAD JSON
-À CHAQUE message, ajoute en **dernière ligne** (sans texte avant/après, sans markdown) un tag :
+À **chaque** message, ajoute en **dernière ligne** (sans texte avant/après, sans markdown) :
 <LEAD_JSON>{{"reason": "<motif ou ''>", "name": "<nom ou ''>", "email": "<email ou ''>", "phone": "<téléphone ou ''>", "availability": "<dispo ou ''>", "stage": "<collecting|ready>"}}</LEAD_JSON>
-
-{ready_rule}
-- Le JSON doit être **une seule ligne** valide. Pas de retour à la ligne, pas de ``` ni autre balise.
+- Le JSON doit être **une seule ligne** valide, sans retour à la ligne, sans ```.
 """
     greet = f"\nMessage d'accueil recommandé : {greeting}\n" if greeting else ""
     return f"{base}\n{biz}\n{guide}\n{greet}"
@@ -237,63 +231,57 @@ def parse_contact_info(text: str) -> dict:
     m = re.search(r'(nom|cabinet|agence)\s*:\s*(.+)', text, re.I);   d["name"]    = m.group(2).strip() if m else None
     return {k: v for k, v in d.items() if v}
 
-# --- TOLÉRANT & INVISIBLE côté UI
-LEAD_TAG_RE = re.compile(r"<LEAD_JSON>\s*(\{.*?\})\s*</LEAD_JSON>", re.IGNORECASE | re.DOTALL)
+LEAD_TAG_RE = re.compile(r"<LEAD_JSON>(\{.*?\})</LEAD_JSON>$")
 
 def extract_lead_json(text: str):
     if not text:
         return text, None
-    matches = list(LEAD_TAG_RE.finditer(text))
-    lead = None
-    if matches:
-        last = matches[-1]
-        try:
-            lead = json.loads(last.group(1))
-        except Exception:
-            lead = None
-    message = LEAD_TAG_RE.sub("", text).strip()
+    m = LEAD_TAG_RE.search(text)
+    if not m:
+        return text, None
+    lead_raw = m.group(1)
+    message = text[:m.start()].rstrip()
+    try:
+        lead = json.loads(lead_raw)
+    except Exception:
+        lead = None
     return message, lead
 
 def send_lead_email(to_email: str, lead: dict, bot_name: str = "Betty Bot"):
-    if not (MJ_API_KEY and MJ_API_SECRET and MJ_FROM_EMAIL):
-        print("[LEAD][MAILJET] ❌ Config manquante (MJ_API_KEY / MJ_API_SECRET / MJ_FROM_EMAIL).")
+    if not (MJ_API_KEY and MJ_API_SECRET and to_email):
+        print("[LEAD][MAILJET] Config manquante (clé/secret/to). Abandon envoi.")
         return
-    if not to_email:
-        print("[LEAD][MAILJET] ❌ Destinataire vide.")
-        return
+
     subject = f"Nouveau lead qualifié via {bot_name}"
     text = (
-        f"Motif        : {lead.get('reason','')}\n"
-        f"Nom          : {lead.get('name','')}\n"
-        f"Email        : {lead.get('email','')}\n"
-        f"Téléphone    : {lead.get('phone','')}\n"
-        f"Disponibilités : {lead.get('availability','')}\n"
-        f"Statut       : {lead.get('stage','')}\n"
+        f"Motif : {lead.get('reason','')}\n"
+        f"Nom   : {lead.get('name','')}\n"
+        f"Email : {lead.get('email','')}\n"
+        f"Tél   : {lead.get('phone','')}\n"
+        f"Dispo : {lead.get('availability','')}\n"
+        f"Statut: {lead.get('stage','')}\n"
     )
+
+    reply_to = []
+    if (lead.get("email") or "").strip():
+        reply_to = [{"Email": lead["email"]}]
+
     payload = {
         "Messages": [{
-            "From": {"Email": MJ_FROM_EMAIL, "Name": MJ_FROM_NAME or "Spectra Media AI"},
+            "From": {"Email": MJ_FROM_EMAIL, "Name": MJ_FROM_NAME},
             "To":   [{"Email": to_email}],
-            "ReplyTo": {"Email": lead.get("email") or MJ_FROM_EMAIL, "Name": lead.get("name","")},
             "Subject": subject,
-            "TextPart": text
+            "TextPart": text,
+            **({"ReplyTo": reply_to[0]} if reply_to else {})
         }]
     }
+
     try:
-        r = requests.post(
-            "https://api.mailjet.com/v3.1/send",
-            auth=(MJ_API_KEY, MJ_API_SECRET),
-            json=payload,
-            timeout=20
-        )
-        ok = r.ok
-        try:
-            body = r.json()
-        except Exception:
-            body = {"raw": r.text[:300]}
-        print("[LEAD][MAILJET] status", r.status_code, "body", body)
-        if ok:
-            pass
+        r = requests.post("https://api.mailjet.com/v3.1/send", auth=(MJ_API_KEY, MJ_API_SECRET), json=payload, timeout=20)
+        if r.ok:
+            print("[LEAD][MAILJET] OK")
+        else:
+            print("[LEAD][MAILJET] KO", r.status_code, r.text[:300])
     except Exception as e:
         print("[LEAD][MAILJET][EXC]", type(e).__name__, e)
 
@@ -418,21 +406,15 @@ def recap_page():
     bot = db_get_bot(public_id) if public_id else None
 
     if not bot:
-        # fallback (dev)
         key = "avocat-001" if pack=="avocat" else ("medecin-003" if pack=="medecin" else "immo-002")
         base = BOTS[key]
-        bot = {
-            "public_id": public_id or f"{key}-demo",
-            "name": base["name"],
-            "owner_name": "Client",
-        }
+        bot = {"public_id": public_id or f"{key}-demo", "name": base["name"], "owner_name": "Client"}
 
     display   = bot.get("name") or "Betty Bot"
     owner     = bot.get("owner_name") or ""
     full_name = f"{display} — {owner}" if owner else display
 
-    return render_template(
-        "recap.html",
+    return render_template("recap.html",
         base_url=BASE_URL,
         pack=pack,
         public_id=bot.get("public_id") or "",
@@ -448,29 +430,17 @@ def chat_page():
 
     bot = db_get_bot(public_id)
     if not bot:
-        # fallback: première dispo (dev)
         base = BOTS["avocat-001"]
         bot = {
             "public_id": public_id or "avocat-001-demo",
-            "name": base["name"],
-            "color": base["color"],
-            "avatar_file": base["avatar_file"],
+            "name": base["name"], "color": base["color"], "avatar_file": base["avatar_file"],
             "greeting": "Bonjour, je suis Betty. Comment puis-je vous aider ?",
-            "owner_name": "Client",
-            "profile": {},
-            "pack": base["pack"]
+            "owner_name": "Client", "profile": {}, "pack": base["pack"]
         }
 
     display_name = bot.get("name") or "Betty Bot"
     pack_code = (bot.get("pack") or "").lower()
-    pack_label_map = {
-        "medecin": "Médecin",
-        "avocat": "Avocat",
-        "immo": "Immobilier",
-        "immobilier": "Immobilier",
-        "notaire": "Notaire",
-    }
-    pack_label = pack_label_map.get(pack_code, "")
+    pack_label = {"medecin":"Médecin","avocat":"Avocat","immo":"Immobilier","immobilier":"Immobilier","notaire":"Notaire"}.get(pack_code, "")
     full_name = f"{display_name} ({pack_label})" if pack_label else display_name
 
     return render_template(
@@ -478,7 +448,7 @@ def chat_page():
         title="Betty — Chat",
         base_url=BASE_URL,
         public_id=bot.get("public_id") or "",
-        full_name=full_name,  # Titre propre, jamais l’email acheteur
+        full_name=full_name,               # propre, sans email acheteur
         color=bot.get("color") or "#4F46E5",
         avatar_url=static_url(bot.get("avatar_file") or "avocat.jpg"),
         greeting=bot.get("greeting") or "Bonjour, je suis Betty. Comment puis-je vous aider ?",
@@ -500,7 +470,6 @@ def bettybot_reply():
 
     bot_key, bot = find_bot_by_public_id(public_id)
     if not bot:
-        # fallback par défaut
         bot_key = "avocat-001"
         bot = BOTS[bot_key]
 
@@ -524,16 +493,32 @@ def bettybot_reply():
     else:
         session[f"conv_{public_id or bot_key}"] = history
 
-    # Envoi lead quand ready -> envoyé à l'email d'inscription (DB)
+    # Envoi lead quand il est prêt (avec fallback serveur si le LLM oublie stage="ready")
     if lead and isinstance(lead, dict):
-        if bot.get("pack") == "medecin":
-            stage_ok = (lead.get("stage") == "ready" and bool(lead.get("email")) and bool(lead.get("name")) and bool(lead.get("reason")))
+        reason = (lead.get("reason") or "").strip()
+        name   = (lead.get("name") or "").strip()
+        email  = (lead.get("email") or "").strip()
+        phone  = (lead.get("phone") or "").strip()
+        avail  = (lead.get("availability") or "").strip()
+        stage  = (lead.get("stage") or "collecting").strip().lower()
+
+        has_contact = bool(email or phone)
+
+        if (bot.get("pack") or "").lower() == "medecin":
+            server_ready = bool(reason and name and email)
         else:
-            stage_ok = (lead.get("stage") == "ready" and bool(lead.get("name")) and bool(lead.get("reason")) and (lead.get("email") or lead.get("phone")))
-        if stage_ok:
-            buyer_email = bot.get("buyer_email")
+            server_ready = bool(reason and name and has_contact)
+
+        is_ready = (stage == "ready") or server_ready
+
+        if is_ready:
+            buyer_email = (bot.get("buyer_email") or "").strip()
             if buyer_email:
-                send_lead_email(buyer_email, lead, bot_name=bot.get("name") or "Betty Bot")
+                send_lead_email(
+                    buyer_email,
+                    {"reason": reason, "name": name, "email": email, "phone": phone, "availability": avail, "stage": "ready"},
+                    bot_name=bot.get("name") or "Betty Bot"
+                )
 
     return jsonify({"response": response_text})
 
