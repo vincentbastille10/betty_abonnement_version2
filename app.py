@@ -450,8 +450,15 @@ def chat_page():
         }
 
     display_name = bot.get("name") or "Betty Bot"
-    owner = bot.get("owner_name") or "Client"
-    full_name = f"{display_name} — {owner}" if owner else display_name
+
+# Récupère le pack métier (médecin, avocat, etc.)
+pack_name = bot.get("pack") or bot.get("category") or ""
+
+# Crée le titre dynamique sans afficher l'acheteur
+if pack_name:
+    full_name = f"{display_name} ({pack_name.capitalize()})"
+else:
+    full_name = display_name
 
     return render_template(
         "chat.html",
