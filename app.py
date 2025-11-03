@@ -237,25 +237,29 @@ def parse_contact_info(text: str) -> dict:
     m = re.search(r'(nom|cabinet|agence)\s*:\s*(.+)', text, re.I);   d["name"]    = m.group(2).strip() if m else None
     return {k: v for k, v in d.items() if v}
 
-LEAD_TAG_RE = re.compile(r"<LEAD_JSON>(\{.*?\})</LEAD_JSON>$")
+# --- TOLÉRANT & INVISIBLE côté UI
+LEAD_TAG_RE = re.compile(r"<LEAD_JSON>\s*(\{.*?\})\s*</LEAD_JSON>", re.IGNORECASE | re.DOTALL)
 
 def extract_lead_json(text: str):
     if not text:
         return text, None
-    m = LEAD_TAG_RE.search(text)
-    if not m:
-        return text, None
-    lead_raw = m.group(1)
-    message = text[:m.start()].rstrip()
-    try:
-        lead = json.loads(lead_raw)
-    except Exception:
-        lead = None
+    matches = list(LEAD_TAG_RE.finditer(text))
+    lead = None
+    if matches:
+        last = matches[-1]
+        try:
+            lead = json.loads(last.group(1))
+        except Exception:
+            lead = None
+    message = LEAD_TAG_RE.sub("", text).strip()
     return message, lead
 
 def send_lead_email(to_email: str, lead: dict, bot_name: str = "Betty Bot"):
-    if not (MJ_API_KEY and MJ_API_SECRET and to_email):
-        print("[LEAD][MAILJET] Config manquante ou email vide, email non envoyé.")
+    if not (MJ_API_KEY and MJ_API_SECRET and MJ_FROM_EMAIL):
+        print("[LEAD][MAILJET] ❌ Config manquante (MJ_API_KEY / MJ_API_SECRET / MJ_FROM_EMAIL).")
+        return
+    if not to_email:
+        print("[LEAD][MAILJET] ❌ Destinataire vide.")
         return
     subject = f"Nouveau lead qualifié via {bot_name}"
     text = (
@@ -268,8 +272,9 @@ def send_lead_email(to_email: str, lead: dict, bot_name: str = "Betty Bot"):
     )
     payload = {
         "Messages": [{
-            "From": {"Email": MJ_FROM_EMAIL, "Name": MJ_FROM_NAME},
+            "From": {"Email": MJ_FROM_EMAIL, "Name": MJ_FROM_NAME or "Spectra Media AI"},
             "To":   [{"Email": to_email}],
+            "ReplyTo": {"Email": lead.get("email") or MJ_FROM_EMAIL, "Name": lead.get("name","")},
             "Subject": subject,
             "TextPart": text
         }]
@@ -279,9 +284,16 @@ def send_lead_email(to_email: str, lead: dict, bot_name: str = "Betty Bot"):
             "https://api.mailjet.com/v3.1/send",
             auth=(MJ_API_KEY, MJ_API_SECRET),
             json=payload,
-            timeout=15
+            timeout=20
         )
-        print("[LEAD][MAILJET]", "OK" if r.ok else f"KO {r.status_code} {r.text[:120]}")
+        ok = r.ok
+        try:
+            body = r.json()
+        except Exception:
+            body = {"raw": r.text[:300]}
+        print("[LEAD][MAILJET] status", r.status_code, "body", body)
+        if ok:
+            pass
     except Exception as e:
         print("[LEAD][MAILJET][EXC]", type(e).__name__, e)
 
@@ -450,50 +462,23 @@ def chat_page():
         }
 
     display_name = bot.get("name") or "Betty Bot"
+    pack_code = (bot.get("pack") or "").lower()
+    pack_label_map = {
+        "medecin": "Médecin",
+        "avocat": "Avocat",
+        "immo": "Immobilier",
+        "immobilier": "Immobilier",
+        "notaire": "Notaire",
+    }
+    pack_label = pack_label_map.get(pack_code, "")
+    full_name = f"{display_name} ({pack_label})" if pack_label else display_name
 
-# Récupère le pack métier (médecin, avocat, etc.)
-pack_name = bot.get("pack") or bot.get("category") or ""
-
-# Crée le titre dynamique sans afficher l'acheteur
-if pack_name:
-    full_name = f"{display_name} ({pack_name.capitalize()})"
-else:
-    full_name = display_name
-# ... dans la route /chat, juste avant le render_template(...)
-
-display_name = bot.get("name") or "Betty Bot"
-pack_code = (bot.get("pack") or "").lower()
-
-# libellés propres pour l'entête
-pack_label_map = {
-    "medecin": "Médecin",
-    "avocat": "Avocat",
-    "immo": "Immobilier",
-    "immobilier": "Immobilier",
-    "notaire": "Notaire",
-}
-pack_label = pack_label_map.get(pack_code, "")
-
-# Titre final SANS info acheteur
-full_name = f"{display_name} ({pack_label})" if pack_label else display_name
-
-return render_template(
-    "chat.html",
-    title="Betty — Chat",
-    base_url=BASE_URL,
-    public_id=bot.get("public_id") or "",
-    full_name=full_name,                # ← passe le titre propre
-    color=bot.get("color") or "#4F46E5",
-    avatar_url=static_url(bot.get("avatar_file") or "avocat.jpg"),
-    greeting=bot.get("greeting") or "Bonjour, je suis Betty. Comment puis-je vous aider ?",
-    embed=embed
-)
     return render_template(
         "chat.html",
         title="Betty — Chat",
         base_url=BASE_URL,
         public_id=bot.get("public_id") or "",
-        full_name=full_name,
+        full_name=full_name,  # Titre propre, jamais l’email acheteur
         color=bot.get("color") or "#4F46E5",
         avatar_url=static_url(bot.get("avatar_file") or "avocat.jpg"),
         greeting=bot.get("greeting") or "Bonjour, je suis Betty. Comment puis-je vous aider ?",
@@ -541,7 +526,6 @@ def bettybot_reply():
 
     # Envoi lead quand ready -> envoyé à l'email d'inscription (DB)
     if lead and isinstance(lead, dict):
-        stage_ok = False
         if bot.get("pack") == "medecin":
             stage_ok = (lead.get("stage") == "ready" and bool(lead.get("email")) and bool(lead.get("name")) and bool(lead.get("reason")))
         else:
