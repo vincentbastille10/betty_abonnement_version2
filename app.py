@@ -459,7 +459,35 @@ if pack_name:
     full_name = f"{display_name} ({pack_name.capitalize()})"
 else:
     full_name = display_name
+# ... dans la route /chat, juste avant le render_template(...)
 
+display_name = bot.get("name") or "Betty Bot"
+pack_code = (bot.get("pack") or "").lower()
+
+# libellés propres pour l'entête
+pack_label_map = {
+    "medecin": "Médecin",
+    "avocat": "Avocat",
+    "immo": "Immobilier",
+    "immobilier": "Immobilier",
+    "notaire": "Notaire",
+}
+pack_label = pack_label_map.get(pack_code, "")
+
+# Titre final SANS info acheteur
+full_name = f"{display_name} ({pack_label})" if pack_label else display_name
+
+return render_template(
+    "chat.html",
+    title="Betty — Chat",
+    base_url=BASE_URL,
+    public_id=bot.get("public_id") or "",
+    full_name=full_name,                # ← passe le titre propre
+    color=bot.get("color") or "#4F46E5",
+    avatar_url=static_url(bot.get("avatar_file") or "avocat.jpg"),
+    greeting=bot.get("greeting") or "Bonjour, je suis Betty. Comment puis-je vous aider ?",
+    embed=embed
+)
     return render_template(
         "chat.html",
         title="Betty — Chat",
