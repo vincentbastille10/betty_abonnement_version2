@@ -601,21 +601,18 @@ app.logger.info(f"[DBG] buyer_email payload='{payload.get('buyer_email')}' ref='
                 and (lead.get("email") or lead.get("phone"))
             )
 
-        if stage_ok:
-            # L.594-L.598 — résolution définitive de l'adresse cible
-        buyer_email = (
-            bot.get("buyer_email")
-            or ((db_get_bot(public_id) or {}).get("buyer_email") if public_id else None)
-            or payload_buyer_email  # ← nouveau fallback robuste
-        )
+        # L591-L603 — REMPLACER TOUT LE BLOC
+    if stage_ok:
+    buyer_email = (
+        bot.get("buyer_email")
+        or ((db_get_bot(public_id) or {}).get("buyer_email") if public_id else None)
+    )
 
-            )
-            if not buyer_email:
-                app.logger.warning(
-                    f"[LEAD] buyer_email introuvable pour public_id={public_id} (pack={bot.get('pack')})"
-                )
-            else:
-                app.logger.info(f"[LEAD] envoi -> {buyer_email} (public_id={public_id})")
+    if not buyer_email:
+        app.logger.warning(f"[LEAD] buyer_email introuvable pour public_id={public_id} (pack={bot.get('pack')})")
+    else:
+        send_lead_email(buyer_email, lead, bot_name=bot.get("name") or "Betty Bot")
+
                 # L.600
 app.logger.info(f"[LEAD] envoi -> {buyer_email} (public_id={public_id})")
                 send_lead_email(buyer_email, lead, bot_name=bot.get("name") or "Betty Bot")
