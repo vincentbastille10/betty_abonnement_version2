@@ -640,6 +640,32 @@ def embed_meta():
         "greeting": bot.get("greeting") or "Bonjour, je suis Betty. Comment puis-je vous aider ?",
         "buyer_email": bot.get("buyer_email") or ""
     })
+@app.route("/api/bot_meta")
+def bot_meta():
+    # Accepte bot_id (clé simple) OU public_id (clé longue)
+    bot_id = (request.args.get("bot_id") or request.args.get("public_id") or "").strip()
+
+    # 1) Si on reçoit une clé simple (ex: "avocat-001")
+    if bot_id in BOTS:
+        b = BOTS[bot_id]
+        return jsonify({
+            "name": b.get("name") or "Betty Bot",
+            "color_hex": b.get("color") or "#4F46E5",
+            "avatar_url": static_url(b.get("avatar_file") or "avocat.jpg"),
+            "greeting": b.get("greeting") or "Bonjour, je suis Betty. Comment puis-je vous aider ?"
+        })
+
+    # 2) Sinon on tente comme un public_id
+    _, bot = find_bot_by_public_id(bot_id)
+    if not bot:
+        return jsonify({"error": "bot_not_found"}), 404
+
+    return jsonify({
+        "name": bot.get("name") or "Betty Bot",
+        "color_hex": bot.get("color") or "#4F46E5",
+        "avatar_url": static_url(bot.get("avatar_file") or "avocat.jpg"),
+        "greeting": bot.get("greeting") or "Bonjour, je suis Betty. Comment puis-je vous aider ?"
+    })
 
 @app.route("/healthz")
 def healthz():
