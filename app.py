@@ -643,6 +643,7 @@ def embed_meta():
         "color_hex": bot.get("color") or "#4F46E5",
         "avatar_url": static_url(bot.get("avatar_file") or "avocat.jpg"),
         "greeting": bot.get("greeting") or "Bonjour, je suis Betty. Comment puis-je vous aider ?"
+        "buyer_email": bot.get("buyer_email") or "" 
     })
 
 @app.route("/healthz")
