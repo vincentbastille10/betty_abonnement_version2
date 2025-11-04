@@ -553,6 +553,9 @@ def bettybot_reply():
         key = f"conv_{public_id or bot_key}"
         history = session.get(key, [])
     history = history[-6:]
+    # L.556 — debug pour vérifier ce que le front envoie
+    payload_buyer_email = (payload.get("buyer_email") or "").strip()
+    app.logger.info(f"[DBG] payload_keys={list(payload.keys())} buyer_email_in='{payload_buyer_email}' public_id='{public_id}'")
 
     system_prompt = build_system_prompt(bot.get("pack", "avocat"), bot.get("profile", {}), bot.get("greeting", ""))
 
