@@ -4,6 +4,8 @@ from flask import Flask, render_template, request, jsonify, redirect, url_for, s
 import os, yaml, requests, re, stripe, json, uuid, hashlib, sqlite3, time
 from pathlib import Path
 from contextlib import contextmanager
+from urllib.parse import urlparse, parse_qs
+
 
 app = Flask(__name__)
 app.secret_key = os.getenv("FLASK_SECRET_KEY", "dev-secret-change-me")
@@ -553,14 +555,14 @@ def bettybot_reply():
         key = f"conv_{public_id or bot_key}"
         history = session.get(key, [])
     history = history[-6:]
-    # L.556-L.562 — récupère buyer_email depuis payload OU depuis l'URL du chat (Referer)
-from urllib.parse import urlparse, parse_qs  # idempotent si déjà importé plus haut
-
+    # --- buyer_email provenant du front (payload) OU de l’URL de l’iframe (/chat?...&buyer_email=) ---
+# --- buyer_email provenant du front (payload) OU de l’URL de l’iframe (/chat?...&buyer_email=) ---
 referrer = request.referrer or ""
 q = parse_qs(urlparse(referrer).query) if referrer else {}
-buyer_from_ref = (q.get("buyer_email", [None])[0] or "")  # valeur dans l'URL du /chat
-payload_buyer_email = (payload.get("buyer_email") or buyer_from_ref or "").strip()
-app.logger.info(f"[DBG] buyer_email payload='{payload.get('buyer_email')}' ref='{buyer_from_ref}' public_id='{public_id}'")
+buyer_email_ctx = (payload.get("buyer_email") or q.get("buyer_email", [None])[0] or "").strip()
+app.logger.info(
+    f"[DBG] buyer_email(payload='{payload.get('buyer_email')}'; ref='{q.get('buyer_email',[None])[0]}') pid='{public_id}'"
+)
 
     # L.556 — debug pour vérifier ce que le front envoie
     payload_buyer_email = (payload.get("buyer_email") or "").strip()
@@ -606,6 +608,7 @@ app.logger.info(f"[DBG] buyer_email payload='{payload.get('buyer_email')}' ref='
     buyer_email = (
         bot.get("buyer_email")
         or ((db_get_bot(public_id) or {}).get("buyer_email") if public_id else None)
+        or buyer_email_ctx
     )
 
     if not buyer_email:
