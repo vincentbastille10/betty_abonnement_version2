@@ -519,16 +519,18 @@ def chat_page():
     full_name = f"{display_name} ({pack_label})" if pack_label else display_name
 
     return render_template(
-        "chat.html",
-        title="Betty — Chat",
-        base_url=BASE_URL,
-        public_id=bot.get("public_id") or "",
-        full_name=full_name,  # SANS email acheteur
-        color=bot.get("color") or "#4F46E5",
-        avatar_url=static_url(bot.get("avatar_file") or "avocat.jpg"),
-        greeting=bot.get("greeting") or "Bonjour, je suis Betty. Comment puis-je vous aider ?",
-        embed=embed
-    )
+    "chat.html",
+    title="Betty — Chat",
+    base_url=BASE_URL,
+    public_id=bot.get("public_id") or "",
+    full_name=full_name,                          # garde-le si tu l’utilises ailleurs
+    header_title="Betty Bot, votre assistante AI",# <-- AJOUT
+    color=bot.get("color") or "#4F46E5",
+    avatar_url=static_url(bot.get("avatar_file") or "avocat.jpg"),
+    greeting=bot.get("greeting") or "Bonjour, je suis Betty. Comment puis-je vous aider ?",
+    embed=embed
+)
+
 
 # =========================
 # API
