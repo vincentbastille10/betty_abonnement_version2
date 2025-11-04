@@ -101,35 +101,34 @@
   </div>
 
   <script>
-    (function(){
-      const BASE  = "{{ base_url }}".replace(/\/$/, "");
-      const pid   = "{{ public_id }}";
-      const fullName = "{{ full_name|e }}";
+  (function(){
+    const BASE  = "{{ base_url }}".replace(/\/$/, "");
+    const pid   = "{{ public_id }}";
+    const fullName = "{{ full_name|e }}";
 
-      const tabIframe = document.getElementById('t-iframe');
-      const tabScript = document.getElementById('t-script');
-      const codeEl    = document.getElementById('code');
-      const helper    = document.getElementById('helper');
-      const live      = document.getElementById('live');
-      const state     = document.getElementById('state');
-      let buyerEmail = "";
-// Récupère buyer_email depuis l'API meta
-  (async () => {
-    try {
-      const r = await fetch(`${BASE}/api/embed_meta?public_id=${pid}`);
-      const meta = await r.json();
-      buyerEmail = (meta && meta.buyer_email) ? meta.buyer_email : "";
-    } catch(e) {
-      buyerEmail = "";
-    }
-  })();
+    const tabIframe = document.getElementById('t-iframe');
+    const tabScript = document.getElementById('t-script');
+    const codeEl    = document.getElementById('code');
+    const helper    = document.getElementById('helper');
+    const live      = document.getElementById('live');
+    const state     = document.getElementById('state');
 
+    /* --- AJOUT : récupérer l'email acheteur --- */
+    let buyerEmail = "";
+    (async () => {
+      try {
+        const r = await fetch(`${BASE}/api/embed_meta?public_id=${pid}`);
+        const meta = await r.json();
+        buyerEmail = (meta && meta.buyer_email) ? meta.buyer_email : "";
+      } catch(e) { buyerEmail = ""; }
+    })();
 
       function codeIframe() {
         return [
 '<!-- Betty Bot AI — affichage direct (Wix/Webflow/Squarespace) -->',
 '<div style="position:relative; width:100%; max-width:420px; height:620px; margin:0 auto;">',
-  `<iframe src="${BASE}/chat?public_id=${pid}&embed=1&buyer_email=${encodeURIComponent(buyerEmail)}"
+  `<iframe src="${BASE}/chat?public_id=${pid}&embed=1&buyer_email=${encodeURIComponent(buyerEmail)}" title="${fullName}"`,
+
 `          title="${fullName}"`,
 '          style="width:100%; height:100%; border:0; border-radius:16px; box-shadow:0 10px 30px rgba(0,0,0,.25); background:#0b0f1e;"',
 '          loading="lazy" referrerpolicy="no-referrer-when-downgrade"',
@@ -181,5 +180,6 @@
   </script>
 </body>
 </html>
+
 
 
