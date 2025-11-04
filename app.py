@@ -555,20 +555,21 @@ def bettybot_reply():
         key = f"conv_{public_id or bot_key}"
         history = session.get(key, [])
     history = history[-6:]
-    # --- buyer_email provenant du front (payload) OU de l’URL de l’iframe (/chat?...&buyer_email=) ---
-# --- buyer_email provenant du front (payload) OU de l’URL de l’iframe (/chat?...&buyer_email=) ---
-referrer = request.referrer or ""
-q = parse_qs(urlparse(referrer).query) if referrer else {}
-buyer_email_ctx = (payload.get("buyer_email") or q.get("buyer_email", [None])[0] or "").strip()
-app.logger.info(
-    f"[DBG] buyer_email(payload='{payload.get('buyer_email')}'; ref='{q.get('buyer_email',[None])[0]}') pid='{public_id}'"
-)
 
-    # L.556 — debug pour vérifier ce que le front envoie
-    payload_buyer_email = (payload.get("buyer_email") or "").strip()
-    app.logger.info(f"[DBG] payload_keys={list(payload.keys())} buyer_email_in='{payload_buyer_email}' public_id='{public_id}'")
+    # --- buyer_email depuis payload OU URL du /chat dans l’iframe (via Referer)
+    referrer = request.referrer or ""
+    q = parse_qs(urlparse(referrer).query) if referrer else {}
+    buyer_email_ctx = (payload.get("buyer_email") or q.get("buyer_email", [None])[0] or "").strip()
+    app.logger.info(
+        f"[DBG] buyer_email(payload='{payload.get('buyer_email')}'; ref='{q.get('buyer_email',[None])[0]}') pid='{public_id}'"
+    )
 
-    system_prompt = build_system_prompt(bot.get("pack", "avocat"), bot.get("profile", {}), bot.get("greeting", ""))
+    # Prompt LLM
+    system_prompt = build_system_prompt(
+        bot.get("pack", "avocat"),
+        bot.get("profile", {}),
+        bot.get("greeting", "")
+    )
 
     full_text = call_llm_with_history(system_prompt=system_prompt, history=history, user_input=user_input)
     if not full_text:  # Together KO -> fallback rule-based
@@ -584,11 +585,10 @@ app.logger.info(
     else:
         session[f"conv_{public_id or bot_key}"] = history
 
-    # Envoi lead quand ready -> e-mail d'inscription (DB)
-        # Envoi lead quand ready -> e-mail d'inscription (DB)
+    # Envoi e-mail si lead "ready"
+    debug_to = None
     if lead and isinstance(lead, dict):
-        stage_ok = False
-        if bot.get("pack") == "medecin":
+        if (bot.get("pack") == "medecin"):
             stage_ok = (
                 lead.get("stage") == "ready"
                 and bool(lead.get("email"))
@@ -603,47 +603,40 @@ app.logger.info(
                 and (lead.get("email") or lead.get("phone"))
             )
 
-        # L591-L603 — REMPLACER TOUT LE BLOC
-    if stage_ok:
-    buyer_email = (
-        bot.get("buyer_email")
-        or ((db_get_bot(public_id) or {}).get("buyer_email") if public_id else None)
-        or buyer_email_ctx
-    )
-
-    if not buyer_email:
-        app.logger.warning(f"[LEAD] buyer_email introuvable pour public_id={public_id} (pack={bot.get('pack')})")
-    else:
-        send_lead_email(buyer_email, lead, bot_name=bot.get("name") or "Betty Bot")
-
-                # L.600
-app.logger.info(f"[LEAD] envoi -> {buyer_email} (public_id={public_id})")
+        if stage_ok:
+            buyer_email = (
+                bot.get("buyer_email")
+                or ((db_get_bot(public_id) or {}).get("buyer_email") if public_id else None)
+                or buyer_email_ctx
+            )
+            if not buyer_email:
+                app.logger.warning(f"[LEAD] buyer_email introuvable pour public_id={public_id} (pack={bot.get('pack')})")
+            else:
+                app.logger.info(f"[LEAD] envoi -> {buyer_email} (public_id={public_id})")
                 send_lead_email(buyer_email, lead, bot_name=bot.get("name") or "Betty Bot")
+                debug_to = buyer_email
 
-    # L.605
-return jsonify({
-    "response": response_text,
-    "stage": (lead or {}).get("stage") if lead else None,
-    "debug_to": buyer_email if (lead and lead.get("stage") == "ready") else None
-})
-
-
+    return jsonify({
+        "response": response_text,
+        "stage": (lead or {}).get("stage") if lead else None,
+        "debug_to": debug_to
+    })
 @app.route("/api/embed_meta")
 def embed_meta():
     public_id = (request.args.get("public_id") or "").strip()
     if not public_id:
-        return jsonify({"error":"missing public_id"}), 400
+        return jsonify({"error": "missing public_id"}), 400
     _, bot = find_bot_by_public_id(public_id)
     if not bot:
-        return jsonify({"error":"bot_not_found"}), 404
+        return jsonify({"error": "bot_not_found"}), 404
     return jsonify({
         "bot_id": public_id,
         "owner_name": bot.get("owner_name") or "Client",
         "display_name": bot.get("name") or "Betty Bot",
         "color_hex": bot.get("color") or "#4F46E5",
         "avatar_url": static_url(bot.get("avatar_file") or "avocat.jpg"),
-        "greeting": bot.get("greeting") or "Bonjour, je suis Betty. Comment puis-je vous aider ?"
-        "buyer_email": bot.get("buyer_email") or "" 
+        "greeting": bot.get("greeting") or "Bonjour, je suis Betty. Comment puis-je vous aider ?",
+        "buyer_email": bot.get("buyer_email") or ""
     })
 
 @app.route("/healthz")
