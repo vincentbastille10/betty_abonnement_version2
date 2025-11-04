@@ -112,7 +112,18 @@
       const helper    = document.getElementById('helper');
       const live      = document.getElementById('live');
       const state     = document.getElementById('state');
-      const buyerEmail = data?.buyer_email || "";
+      let buyerEmail = "";
+// Récupère buyer_email depuis l'API meta
+  (async () => {
+    try {
+      const r = await fetch(`${BASE}/api/embed_meta?public_id=${pid}`);
+      const meta = await r.json();
+      buyerEmail = (meta && meta.buyer_email) ? meta.buyer_email : "";
+    } catch(e) {
+      buyerEmail = "";
+    }
+  })();
+
 
       function codeIframe() {
         return [
@@ -170,4 +181,5 @@
   </script>
 </body>
 </html>
+
 
