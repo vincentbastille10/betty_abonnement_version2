@@ -2,7 +2,8 @@
 <html lang="fr">
 <head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>{{ full_name }}</title>
+<title>{{ full_name or "Betty Bot" }}</title>
+<style>:root{ --avatar-url: url('{{ avatar_url }}'); }</style>
 <style>
   :root{--bg:#0b0f1e;--panel:#111428;--text:#e5e7eb;--accent:{{ color }}}
   *{box-sizing:border-box} html,body{height:100%} body{margin:0;background:var(--bg);color:var(--text);font:14px/1.4 system-ui,Segoe UI,Inter,Arial}
@@ -19,7 +20,11 @@
 </head>
 <body>
 <div class="wrap">
-  <div class="head">{{ full_name }}</div>
+    <div class="head" style="display:flex;align-items:center;gap:10px;">
+    <img class="bot-avatar" src="{{ avatar_url }}" alt="Avatar Betty" style="width:32px;height:32px;border-radius:50%;object-fit:cover;">
+    <span>Betty Bot, votre assistante AI</span>
+  </div>
+
   <div id="chat" class="chat">
     <div class="bubble bot">{{ greeting }}</div>
   </div>
