@@ -593,13 +593,14 @@ def bettybot_reply():
             buyer_email = (
                 bot.get("buyer_email")
                 or ((db_get_bot(public_id) or {}).get("buyer_email") if public_id else None)
+                or (payload.get("buyer_email") or None)
             )
-
             if not buyer_email:
                 app.logger.warning(
                     f"[LEAD] buyer_email introuvable pour public_id={public_id} (pack={bot.get('pack')})"
                 )
             else:
+                app.logger.info(f"[LEAD] envoi -> {buyer_email} (public_id={public_id})")
                 send_lead_email(buyer_email, lead, bot_name=bot.get("name") or "Betty Bot")
 
 
