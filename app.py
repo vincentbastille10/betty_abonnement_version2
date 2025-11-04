@@ -578,9 +578,13 @@ def bettybot_reply():
         else:
             stage_ok = (lead.get("stage") == "ready" and bool(lead.get("name")) and bool(lead.get("reason")) and (lead.get("email") or lead.get("phone")))
         if stage_ok:
-            buyer_email = bot.get("buyer_email")
-            if buyer_email:
-                send_lead_email(buyer_email, lead, bot_name=bot.get("name") or "Betty Bot")
+            buyer_email = (bot.get("buyer_email")
+               or ((db_get_bot(public_id) or {}).get("buyer_email") if public_id else None))
+
+    if not buyer_email:
+    app.logger.warning(f"[LEAD] buyer_email introuvable pour public_id={public_id} (pack={bot.get('pack')})")
+        else:
+    send_lead_email(buyer_email, lead, bot_name=bot.get("name") or "Betty Bot")
 
     return jsonify({"response": response_text})
 
