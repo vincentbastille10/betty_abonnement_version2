@@ -571,20 +571,37 @@ def bettybot_reply():
         session[f"conv_{public_id or bot_key}"] = history
 
     # Envoi lead quand ready -> e-mail d'inscription (DB)
+        # Envoi lead quand ready -> e-mail d'inscription (DB)
     if lead and isinstance(lead, dict):
         stage_ok = False
         if bot.get("pack") == "medecin":
-            stage_ok = (lead.get("stage") == "ready" and bool(lead.get("email")) and bool(lead.get("name")) and bool(lead.get("reason")))
+            stage_ok = (
+                lead.get("stage") == "ready"
+                and bool(lead.get("email"))
+                and bool(lead.get("name"))
+                and bool(lead.get("reason"))
+            )
         else:
-            stage_ok = (lead.get("stage") == "ready" and bool(lead.get("name")) and bool(lead.get("reason")) and (lead.get("email") or lead.get("phone")))
-        if stage_ok:
-            buyer_email = (bot.get("buyer_email")
-               or ((db_get_bot(public_id) or {}).get("buyer_email") if public_id else None))
+            stage_ok = (
+                lead.get("stage") == "ready"
+                and bool(lead.get("name"))
+                and bool(lead.get("reason"))
+                and (lead.get("email") or lead.get("phone"))
+            )
 
-    if not buyer_email:
-    app.logger.warning(f"[LEAD] buyer_email introuvable pour public_id={public_id} (pack={bot.get('pack')})")
-        else:
-    send_lead_email(buyer_email, lead, bot_name=bot.get("name") or "Betty Bot")
+        if stage_ok:
+            buyer_email = (
+                bot.get("buyer_email")
+                or ((db_get_bot(public_id) or {}).get("buyer_email") if public_id else None)
+            )
+
+            if not buyer_email:
+                app.logger.warning(
+                    f"[LEAD] buyer_email introuvable pour public_id={public_id} (pack={bot.get('pack')})"
+                )
+            else:
+                send_lead_email(buyer_email, lead, bot_name=bot.get("name") or "Betty Bot")
+
 
     return jsonify({"response": response_text})
 
