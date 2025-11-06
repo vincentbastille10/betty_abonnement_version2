@@ -606,19 +606,42 @@ def bettybot_reply():
             )
 
         # Envoi e-mail si lead "ready"
+# --- ENVOI EMAIL LEAD (version robuste) -------------------------------------
+# stage_ok == True si le JSON de lead est complet (stage == "ready")
 if stage_ok:
+    # 1) Cherche l'email du propriétaire dans tous les emplacements possibles
+    #    - priorité : bot.buyer_email (déjà enregistré à l’inscription)
+    #    - fallback : DB via public_id
+    #    - fallback : payload JSON (ex. buyer_email passé côté front)
+    #    - fallback : querystring (buyer_email_ctx déjà calculé plus haut)
+    #    - fallback : variable d'env DEFAULT_LEAD_EMAIL (ex: support@...)
     buyer_email = (
-        bot.get("buyer_email")
+        (bot or {}).get("buyer_email")
         or ((db_get_bot(public_id) or {}).get("buyer_email") if public_id else None)
-        or payload.get("buyer_email")                     # <-- ajouté
+        or payload.get("buyer_email")
         or buyer_email_ctx
-        or os.getenv("DEFAULT_LEAD_EMAIL")                # <-- fallback générique
+        or os.getenv("DEFAULT_LEAD_EMAIL")
     )
 
+    # 2) Log clair si aucun email n'a été trouvé
     if not buyer_email:
-        app.logger.warning(f"[LEAD] Aucun buyer_email trouvé pour {public_id}, lead non envoyé.")
+        app.logger.warning(
+            f"[LEAD] Aucun buyer_email pour bot_id={public_id or 'N/A'} ; "
+            f"lead enregistré mais email non envoyé."
+        )
     else:
-        send_lead_email(buyer_email, lead, bot_name=bot.get("name") or "Betty Bot")
+        try:
+            # 3) Envoi du mail de lead
+            send_lead_email(
+                to_email=buyer_email,
+                lead=lead,                           # dict: reason/name/email/phone/availability...
+                bot_name=(bot or {}).get("name") or "Betty Bot"
+            )
+            app.logger.info(f"[LEAD] Email envoyé à {buyer_email} pour bot {public_id}")
+        except Exception as e:
+            app.logger.exception(f"[LEAD] Erreur envoi email -> {e}")
+# ---------------------------------------------------------------------------
+
 
 
     return jsonify({
