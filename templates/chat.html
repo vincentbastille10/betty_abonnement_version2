@@ -1,94 +1,127 @@
-@app.route("/chat")
-def chat_page():
-    """
-    Page du chat Betty Bot (intégrable via iframe)
-    Exemple : /chat?public_id=immo-002-5230563d&embed=1&buyer_email=contact@client.com
-    """
-
-    # --- PARAMÈTRES URL ---
-    public_id   = (request.args.get("public_id") or "").strip()
-    embed       = request.args.get("embed", "0") == "1"
-    buyer_email = (request.args.get("buyer_email") or "").strip()
-
-    # --- RÉCUPÉRATION DU BOT ---
-    # Si le bot existe déjà dans la DB, on le charge.
-    bot = db_get_bot(public_id)
-
-    # Si aucun bot trouvé, on crée une instance par défaut (fallback).
-    if not bot:
-        base = BOTS["avocat-001"]
-        bot = {
-            "public_id": public_id or "avocat-001-demo",
-            "name": base["name"],
-            "color": base["color"],
-            "avatar_file": base["avatar_file"],
-            "greeting": "Bonjour, je suis Betty. Comment puis-je vous aider ?",
-            "owner_name": "Client",
-            "profile": {},
-            "pack": base["pack"],
-            "buyer_email": buyer_email  # on conserve l’email si fourni dans l’URL
-        }
-
-    # --- INFOS D’AFFICHAGE ---
-    display_name = bot.get("name") or "Betty Bot"
-
-    pack_code = (bot.get("pack") or "").lower()
-    pack_label_map = {
-        "medecin": "Médecin",
-        "avocat": "Avocat",
-        "immo": "Immobilier",
-        "immobilier": "Immobilier",
-        "notaire": "Notaire",
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <title>{{ title or "Betty — Chat" }}</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <style>
+    :root{
+      --bg:#0b0d12; --card:#0f121a; --line:#1b2230; --ink:#e9eefb; --muted:#a8b2c6;
+      --primary: {{ color or "#4F46E5" }};
     }
-    pack_label = pack_label_map.get(pack_code, "")
+    *{box-sizing:border-box}
+    html,body{margin:0;height:100%}
+    body{background:var(--bg);color:var(--ink);font:14px/1.45 Inter,system-ui,Segoe UI,Roboto,Helvetica,Arial,sans-serif}
+    .wrap{max-width:760px;margin:0 auto;padding:16px}
+    header{display:flex;align-items:center;gap:12px;margin-bottom:10px}
+    .avatar{width:40px;height:40px;border-radius:10px;overflow:hidden;border:1px solid var(--line);background:#0c0f16}
+    .avatar img{width:100%;height:100%;object-fit:cover}
+    h1{margin:0;font-size:16px}
+    .sub{color:var(--muted);font-size:12px}
+    .chat{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:12px;height:70vh;min-height:480px;display:flex;flex-direction:column}
+    .msgs{flex:1;overflow:auto;display:flex;flex-direction:column;gap:10px;padding-right:6px}
+    .bubble{max-width:78%;padding:10px 12px;border-radius:14px;border:1px solid var(--line);white-space:pre-wrap}
+    .bot{align-self:flex-start;background:#101622}
+    .me{align-self:flex-end;background:#0e1420}
+    .warn{border-color:#3b2f0b;background:#1c1606;color:#ffdb6e}
+    .input{display:flex;gap:8px;margin-top:10px}
+    .input input{flex:1;padding:12px;border-radius:12px;border:1px solid var(--line);background:#0e1420;color:var(--ink)}
+    .input button{padding:12px 14px;border-radius:12px;border:0;background:var(--primary);color:#fff;font-weight:700;cursor:pointer}
+    .input button[disabled]{opacity:.6;cursor:not-allowed}
+  </style>
+</head>
 
-    if pack_label:
-        full_name = f"{display_name} ({pack_label})"
-    else:
-        full_name = display_name
+<body>
+  <div class="wrap">
+    {% if not embed %}
+    <header>
+      <div class="avatar"><img src="{{ avatar_url }}" alt="avatar"></div>
+      <div>
+        <h1>{{ full_name }}</h1>
+        <div class="sub">{{ header_title }}</div>
+      </div>
+    </header>
+    {% endif %}
 
-    # --- AVATAR ET COULEUR ---
-    avatar_file = bot.get("avatar_file") or "avocat.jpg"
-    color_hex   = bot.get("color") or "#4F46E5"
+    <div class="chat">
+      <div id="msgs" class="msgs"></div>
+      <div class="input">
+        <input id="msg" placeholder="Écrivez votre message…" autocomplete="off">
+        <button id="send">Envoyer</button>
+      </div>
+    </div>
+  </div>
 
-    # --- MESSAGE D’ACCUEIL ---
-    greeting_text = (
-        bot.get("greeting")
-        or "Bonjour, je suis Betty. Comment puis-je vous aider ?"
-    )
+  <script>
+    // ------- Contexte transmis par le serveur -------
+    const PUBLIC_ID   = {{ public_id|tojson }};
+    const BUYER_EMAIL = {{ buyer_email|tojson }};    // <- nécessaire à l’envoi du lead côté API
+    const GREETING    = {{ (greeting or "Bonjour, je suis Betty. Comment puis-je vous aider ?")|tojson }};
+    const PACK        = {{ (pack or "")|tojson }};
 
-    # --- PROPAGATION DU BUYER EMAIL ---
-    # On essaie plusieurs sources : DB > URL > fallback
-    buyer_email_final = (
-        buyer_email
-        or bot.get("buyer_email")
-        or os.getenv("DEFAULT_LEAD_EMAIL", "")
-    )
+    // ------- Petites utilitaires UI -------
+    const msgs = document.getElementById('msgs');
+    const input = document.getElementById('msg');
+    const btn = document.getElementById('send');
 
-    # --- LOGS DEBUG ---
-    app.logger.info(
-        f"[CHAT] public_id={public_id} embed={embed} buyer_email={buyer_email_final}"
-    )
+    function addBubble(text, who='bot', cls=null){
+      const el = document.createElement('div');
+      el.className = 'bubble ' + (who==='me'?'me':'bot') + (cls?(' '+cls):'');
+      el.textContent = String(text || '');
+      msgs.appendChild(el);
+      msgs.scrollTop = msgs.scrollHeight;
+    }
 
-    # --- RENDU DU TEMPLATE ---
-    try:
-        return render_template(
-            "chat.html",
-            title="Betty — Chat",
-            base_url=BASE_URL,
-            public_id=bot.get("public_id") or "",
-            full_name=full_name,
-            header_title="Betty Bot, votre assistante AI",
-            color=color_hex,
-            avatar_url=static_url(avatar_file),
-            greeting=greeting_text,
-            embed=embed,
-            buyer_email=buyer_email_final
-        )
-    except Exception as e:
-        # Si le template crash, on affiche une erreur lisible
-        app.logger.exception(f"[CHAT] Erreur rendu template : {e}")
-        return (
-            f"<h3 style='color:red;text-align:center;'>Erreur de rendu du chat : {e}</h3>",
-            500,
-        )
+    // ------- Conversation ID persistante (localStorage) -------
+    const convKey = 'bb_conv_' + (PUBLIC_ID || 'demo');
+    let convId = localStorage.getItem(convKey);
+    if(!convId){
+      convId = Math.random().toString(36).slice(2) + Date.now().toString(36);
+      localStorage.setItem(convKey, convId);
+    }
+
+    // ------- Appel API -------
+    async function talk(userText){
+      try{
+        const res = await fetch('/api/bettybot', {
+          method:'POST',
+          headers:{'Content-Type':'application/json'},
+          credentials:'same-origin',
+          body: JSON.stringify({
+            message: userText,
+            public_id: PUBLIC_ID,
+            conv_id: convId,
+            buyer_email: BUYER_EMAIL     // <- on propage systématiquement
+          })
+        });
+        const data = await res.json().catch(()=>null);
+        if(!res.ok || !data || typeof data.response !== 'string'){
+          addBubble("Impossible de joindre le serveur.", "bot", "warn");
+          return;
+        }
+        addBubble(data.response, 'bot');
+      }catch(_){
+        addBubble("Impossible de joindre le serveur.", "bot", "warn");
+      }
+    }
+
+    // ------- Envoi -------
+    let sending = false;
+    async function send(){
+      const t = (input.value || '').trim();
+      if(!t || sending) return;
+      sending = true; btn.disabled = true;
+      addBubble(t, 'me');
+      input.value = '';
+      await talk(t);
+      sending = false; btn.disabled = false; input.focus();
+    }
+    btn.addEventListener('click', send);
+    input.addEventListener('keydown', e=>{ if(e.key==='Enter'){ e.preventDefault(); send(); } });
+
+    // ------- Démarrage -------
+    addBubble(GREETING, 'bot');
+    input.focus();
+  </script>
+</body>
+</html>
