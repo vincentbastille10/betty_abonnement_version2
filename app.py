@@ -478,13 +478,15 @@ def recap_page():
     full_name = f"{display} — {owner}" if owner else display
 
     return render_template(
-        "recap.html",
-        base_url=BASE_URL,
-        pack=pack,
-        public_id=bot.get("public_id") or "",
-        full_name=full_name,
-        title="Récapitulatif"
-    )
+    "recap.html",
+    base_url=BASE_URL,
+    pack=pack,
+    public_id=bot.get("public_id"),
+    full_name=full_name,
+    buyer_email=bot.get("buyer_email"),
+    # autres variables éventuellement utilisées
+)
+
 
 @app.route("/chat")
 def chat_page():
