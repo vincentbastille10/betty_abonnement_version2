@@ -493,7 +493,8 @@ def chat_page():
     # Iframe embarqué : /chat?public_id=...&embed=1
     public_id = (request.args.get("public_id") or "").strip()
     embed     = request.args.get("embed", "0") == "1"
-
+    buyer_email = request.args.get("buyer_email", "").strip()
+    
     bot = db_get_bot(public_id)
     if not bot:
         base = BOTS["avocat-001"]
