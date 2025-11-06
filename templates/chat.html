@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <title>Prévisualisation du bot</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <style>
+    :root { --brand: {{ (cfg.color_hex or '#4F46E5') if cfg else '#4F46E5' }}; }
+    body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial;margin:24px;background:#0d1117;color:#e5e7eb}
+    .wrap{max-width:900px;margin:auto;display:grid;gap:20px}
+    .card{background:#111827;border:1px solid #1f2937;border-radius:14px;padding:20px}
+    h1{margin:0 0 8px}
+    .muted{color:#9ca3af}
+    .alert{background:#312e81;border:1px solid #4338ca;padding:12px;border-radius:10px}
+    .actions{display:flex;gap:12px;flex-wrap:wrap;margin-top:10px}
+    .btn{display:inline-block;background:#1f2937;border:1px solid #374151;color:#e5e7eb;
+         padding:10px 14px;border-radius:10px;text-decoration:none}
+    .btn.primary{background:var(--brand);border-color:#1d4ed8;color:#fff}
+    .chat{display:grid;gap:10px}
+    .row{display:flex;gap:10px}
+    input,button{font:inherit}
+    input[type=text]{flex:1;background:#0b1220;border:1px solid #293041;color:#fff;border-radius:10px;padding:10px}
+    button{background:var(--brand);border:0;color:#fff;border-radius:10px;padding:10px 14px;cursor:pointer}
+    .bubble{padding:10px 12px;border-radius:10px;max-width:70%}
+    .me{background:#0b1220;border:1px solid #293041;align-self:flex-end}
+    .bot{background:#1f2937;border:1px solid #374151}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="card">
+      <h1>Prévisualisation — {{ cfg.name if cfg else "Mon Betty Bot" }}</h1>
+      <p class="muted">Testez rapidement votre bot avant l’intégration.</p>
+
+      {% if warning %}
+        <div class="alert">
+          {{ warning }}
+          <div class="actions">
+            <a class="btn primary" href="{{ url_for('pay') }}">M’abonner</a>
+            <a class="btn" href="{{ url_for('dashboard') }}">Retour au dashboard</a>
+          </div>
+        </div>
+      {% else %}
+        <div class="actions">
+          <a class="btn" href="{{ url_for('dashboard') }}">Retour au dashboard</a>
+        </div>
+      {% endif %}
+    </div>
+
+    <div class="card chat" id="chat">
+      <div id="messages">
+        <div class="bubble bot">{{ cfg.welcome if cfg else "Bonjour 👋" }}</div>
+      </div>
+      <form id="form" class="row">
+        <input id="msg" type="text" placeholder="Écrivez un message…" autocomplete="off" />
+        <button type="submit">Envoyer</button>
+      </form>
+    </div>
+  </div>
+
+  <script>
+    const form = document.getElementById('form');
+    const input = document.getElementById('msg');
+    const messages = document.getElementById('messages');
+
+    // Regex to detect and remove LEAD_JSON metadata from responses.
+    const LEAD_RE = /<LEAD_JSON>(\{[\s\S]*?\})(?:<\/LEAD_JSON>)?/;
+
+    /**
+     * Strip the LEAD_JSON block from the bot's response.
+     *
+     * @param {string} payload The raw response from the bot
+     * @returns {string} The cleaned response without the LEAD_JSON
+     */
+    function stripLead(payload) {
+      if (!payload) return '';
+      return payload.replace(LEAD_RE, '').trim();
+    }
+
+    function addBubble(text, cls){
+      const div = document.createElement('div');
+      div.className = 'bubble ' + cls;
+      div.textContent = text;
+      messages.appendChild(div);
+      messages.scrollTop = messages.scrollHeight;
+    }
+
+    form.addEventListener('submit', async (e)=>{
+      e.preventDefault();
+      const text = (input.value || '').trim();
+      if(!text) return;
+      addBubble(text, 'me');
+      input.value = '';
+
+      try{
+        const res = await fetch('{{ url_for("api_chat") }}', {
+          method: 'POST',
+          headers: {'Content-Type':'application/json'},
+          body: JSON.stringify({ message: text })
+        });
+        const data = await res.json();
+        // Clean the reply by removing any embedded LEAD_JSON payload.
+        const reply = stripLead(data.reply || '');
+        if(reply){ addBubble(reply, 'bot'); }
+        else { addBubble('Erreur: ' + (data.error || 'réponse vide'), 'bot'); }
+      }catch(err){
+        addBubble('Erreur réseau', 'bot');
+      }
+    });
+  </script>
+</body>
+</html>
