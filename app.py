@@ -471,21 +471,28 @@ def recap_page():
             "public_id": public_id or f"{key}-demo",
             "name": base["name"],
             "owner_name": "Client",
+            "buyer_email": "",     # fallback vide
+            "pack": base["pack"]
         }
 
     display   = bot.get("name") or "Betty Bot"
     owner     = bot.get("owner_name") or ""
     full_name = f"{display} — {owner}" if owner else display
 
+    buyer_email = bot.get("buyer_email") or ""      # <-- IMPORTANT
+    avatar_file = bot.get("avatar_file") or "avocat.jpg"
+
     return render_template(
-    "recap.html",
-    base_url=BASE_URL,
-    pack=pack,
-    public_id=bot.get("public_id"),
-    full_name=full_name,
-    buyer_email=bot.get("buyer_email"),
-    # autres variables éventuellement utilisées
-)
+        "recap.html",
+        title="Récapitulatif",
+        base_url=BASE_URL,
+        pack=pack,
+        public_id=bot.get("public_id") or "",
+        full_name=full_name,
+        buyer_email=buyer_email,                     # <-- IMPORTANT
+        avatar_url=static_url(avatar_file)
+    )
+
 
 
 @app.route("/chat")
