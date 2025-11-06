@@ -37,8 +37,8 @@
     <header>
       <div class="avatar"><img src="{{ avatar_url }}" alt="avatar"></div>
       <div>
-        <h1>{{ full_name }}</h1>
-        <div class="sub">{{ header_title }}</div>
+        <h1>{{ full_name or "Betty Bot" }}</h1>
+        <div class="sub">{{ header_title or "Votre assistante AI" }}</div>
       </div>
     </header>
     {% endif %}
@@ -53,13 +53,10 @@
   </div>
 
   <script>
-    // ------- Contexte transmis par le serveur -------
-    const PUBLIC_ID   = {{ public_id|tojson }};
-    const BUYER_EMAIL = {{ buyer_email|tojson }};    // <- nécessaire à l’envoi du lead côté API
+    const PUBLIC_ID   = {{ (public_id or "")|tojson }};
+    const BUYER_EMAIL = {{ (buyer_email or "")|tojson }};
     const GREETING    = {{ (greeting or "Bonjour, je suis Betty. Comment puis-je vous aider ?")|tojson }};
-    const PACK        = {{ (pack or "")|tojson }};
 
-    // ------- Petites utilitaires UI -------
     const msgs = document.getElementById('msgs');
     const input = document.getElementById('msg');
     const btn = document.getElementById('send');
@@ -72,7 +69,6 @@
       msgs.scrollTop = msgs.scrollHeight;
     }
 
-    // ------- Conversation ID persistante (localStorage) -------
     const convKey = 'bb_conv_' + (PUBLIC_ID || 'demo');
     let convId = localStorage.getItem(convKey);
     if(!convId){
@@ -80,7 +76,6 @@
       localStorage.setItem(convKey, convId);
     }
 
-    // ------- Appel API -------
     async function talk(userText){
       try{
         const res = await fetch('/api/bettybot', {
@@ -91,7 +86,7 @@
             message: userText,
             public_id: PUBLIC_ID,
             conv_id: convId,
-            buyer_email: BUYER_EMAIL     // <- on propage systématiquement
+            buyer_email: BUYER_EMAIL
           })
         });
         const data = await res.json().catch(()=>null);
@@ -105,21 +100,18 @@
       }
     }
 
-    // ------- Envoi -------
     let sending = false;
     async function send(){
       const t = (input.value || '').trim();
       if(!t || sending) return;
       sending = true; btn.disabled = true;
-      addBubble(t, 'me');
-      input.value = '';
+      addBubble(t, 'me'); input.value = '';
       await talk(t);
       sending = false; btn.disabled = false; input.focus();
     }
     btn.addEventListener('click', send);
     input.addEventListener('keydown', e=>{ if(e.key==='Enter'){ e.preventDefault(); send(); } });
 
-    // ------- Démarrage -------
     addBubble(GREETING, 'bot');
     input.focus();
   </script>
