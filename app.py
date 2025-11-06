@@ -605,18 +605,21 @@ def bettybot_reply():
                 and (lead.get("email") or lead.get("phone"))
             )
 
-        if stage_ok:
-            buyer_email = (
-                bot.get("buyer_email")
-                or ((db_get_bot(public_id) or {}).get("buyer_email") if public_id else None)
-                or buyer_email_ctx
-            )
-            if not buyer_email:
-                app.logger.warning(f"[LEAD] buyer_email introuvable pour public_id={public_id} (pack={bot.get('pack')})")
-            else:
-                app.logger.info(f"[LEAD] envoi -> {buyer_email} (public_id={public_id})")
-                send_lead_email(buyer_email, lead, bot_name=bot.get("name") or "Betty Bot")
-                debug_to = buyer_email
+        # Envoi e-mail si lead "ready"
+if stage_ok:
+    buyer_email = (
+        bot.get("buyer_email")
+        or ((db_get_bot(public_id) or {}).get("buyer_email") if public_id else None)
+        or payload.get("buyer_email")                     # <-- ajouté
+        or buyer_email_ctx
+        or os.getenv("DEFAULT_LEAD_EMAIL")                # <-- fallback générique
+    )
+
+    if not buyer_email:
+        app.logger.warning(f"[LEAD] Aucun buyer_email trouvé pour {public_id}, lead non envoyé.")
+    else:
+        send_lead_email(buyer_email, lead, bot_name=bot.get("name") or "Betty Bot")
+
 
     return jsonify({
         "response": response_text,
