@@ -1,130 +1,172 @@
 <!DOCTYPE html>
 <html lang="fr">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Récapitulatif — {{ full_name }}</title>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
   <style>
-    :root {
-      --bg:#0b0f1e;
-      --card:#141a2b;
-      --text:#f5f7fa;
-      --muted:#9aa2b2;
-      --accent:#2563eb;
-      --success:#10b981;
+    :root{
+      --bg:#0b0f1e; --card:#141a2b; --ink:#f5f7fa; --muted:#9aa2b2;
+      --accent:#2563eb; --success:#10b981; --code:#1a2235;
     }
-    * { box-sizing:border-box; }
-    body {
-      margin:0; padding:40px 16px;
-      font-family:'Inter',sans-serif;
-      background:var(--bg); color:var(--text);
-      display:flex; flex-direction:column; align-items:center;
-    }
-    h1 { font-size:1.8rem; margin-bottom:8px; }
-    h2 { color:var(--muted); font-weight:400; font-size:1.1rem; margin-top:0; }
-    .card {
-      background:var(--card);
-      border-radius:16px;
-      padding:32px;
-      max-width:720px;
-      width:100%;
-      box-shadow:0 10px 30px rgba(0,0,0,.3);
-      margin-bottom:40px;
-    }
-    code {
-      background:#1a2235;
-      color:#8ab4f8;
-      padding:6px 8px;
-      border-radius:8px;
-      display:block;
-      overflow-x:auto;
-      white-space:pre;
-      font-size:.9rem;
-      margin-top:8px;
-    }
-    iframe {
-      width:100%;
-      height:620px;
-      border:0;
-      border-radius:16px;
-      box-shadow:0 10px 30px rgba(0,0,0,.25);
-      background:#0b0f1e;
-    }
-    .small {
-      color:var(--muted);
-      font-size:.9rem;
-      margin-top:16px;
-    }
-    .logo {
-      width:140px;
-      opacity:.8;
-      margin-bottom:16px;
-    }
-    .notif {
-      background:rgba(16,185,129,.1);
-      border:1px solid var(--success);
-      color:var(--success);
-      font-weight:600;
-      border-radius:12px;
-      padding:12px 18px;
-      max-width:720px;
-      text-align:center;
-      margin-bottom:32px;
-      animation:fadeIn 1.2s ease;
-    }
-    @keyframes fadeIn {
-      from {opacity:0; transform:translateY(10px);}
-      to {opacity:1; transform:translateY(0);}
-    }
+    *{box-sizing:border-box}
+    body{margin:0;padding:40px 16px;font-family:Inter,system-ui,Segoe UI,Roboto,Helvetica,Arial,sans-serif;background:var(--bg);color:var(--ink);display:flex;flex-direction:column;align-items:center}
+    h1{font-size:1.8rem;margin:0 0 8px}
+    h2{font-weight:600;margin:0 0 16px}
+    .muted{color:var(--muted)}
+    .wrap{width:100%;max-width:920px}
+    .logo{width:150px;opacity:.9;margin:0 0 24px}
+    .card{background:var(--card);border-radius:16px;padding:24px 24px 20px;box-shadow:0 10px 30px rgba(0,0,0,.3);margin:0 0 24px}
+    .grid{display:grid;grid-template-columns:1fr;gap:24px}
+    @media (min-width:960px){.grid{grid-template-columns:1fr 1fr}}
+    .code-block{position:relative;background:var(--code);border-radius:12px;padding:16px 16px 12px;overflow:auto}
+    .code-title{display:flex;justify-content:space-between;align-items:center;margin:0 0 8px}
+    .copy-btn{appearance:none;border:1px solid rgba(255,255,255,.15);background:transparent;color:var(--ink);border-radius:10px;padding:6px 10px;font-weight:600;cursor:pointer}
+    .copy-btn:hover{border-color:rgba(255,255,255,.35)}
+    .ok{background:rgba(16,185,129,.12);border:1px solid var(--success);color:var(--success);border-radius:12px;padding:12px 16px;font-weight:600;text-align:center;margin:0 0 24px}
+    pre,code{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,Monaco,monospace;font-size:.92rem;white-space:pre}
+    iframe{width:100%;height:620px;border:0;border-radius:16px;box-shadow:0 10px 30px rgba(0,0,0,.25);background:#0b0f1e}
+    .small{color:var(--muted);font-size:.9rem;margin-top:8px}
   </style>
 </head>
 <body>
+  <div class="wrap">
+    <img class="logo" src="{{ base_url }}/static/logo-bettybots.png" alt="Betty Bots" />
 
-  <img src="{{ base_url }}/static/logo-bettybots.png" alt="Betty Bots" class="logo">
+    <div class="card">
+      <h1>Votre bot est prêt ✅</h1>
+      <div class="muted" style="margin-bottom:8px;">
+        {{ full_name }} — Pack : <strong>{{ pack|capitalize }}</strong>
+      </div>
+      <div class="ok">
+        ✅ Les leads collectés seront envoyés à : <strong>{{ buyer_email }}</strong>
+      </div>
 
-  <div class="card">
-    <h1>Votre bot est prêt ✅</h1>
-    <h2>{{ full_name }} — Pack : {{ pack|capitalize }}</h2>
+      <p style="margin-top:0">Choisissez le mode d’intégration qui convient à votre site :</p>
 
-    <p>Vous pouvez maintenant intégrer votre assistant AI sur votre site en copiant le code ci-dessous :</p>
+      <div class="grid">
+        <!-- OPTION A — SCRIPT (Wix, Webflow, Squarespace, WordPress...) -->
+        <div class="card">
+          <div class="code-title">
+            <h2 style="margin:0">Option A — Script (recommandé)</h2>
+            <button class="copy-btn" data-target="codeA">Copier</button>
+          </div>
+          <div class="code-block">
+            <pre><code id="codeA_view">&lt;!-- Betty Bot — Script plug-and-play --&gt;
+&lt;div id="bettybot-container" style="position:relative;width:100%;max-width:420px;height:620px;margin:0 auto"&gt;&lt;/div&gt;
+&lt;script&gt;(function(){
+  var pid = "{{ public_id }}";
+  var buyer = "{{ buyer_email|default('', true)|urlencode }}";
+  var src = "{{ base_url }}/chat?public_id=" + encodeURIComponent(pid) + "&embed=1" + (buyer ? "&buyer_email=" + buyer : "");
+  var el = document.getElementById("bettybot-container");
+  var f = document.createElement("iframe");
+  f.src = src;
+  f.title = "{{ full_name }}";
+  f.style.cssText = "width:100%;height:100%;border:0;border-radius:16px;box-shadow:0 10px 30px rgba(0,0,0,.25);background:#0b0f1e;";
+  f.setAttribute("loading","lazy");
+  f.setAttribute("referrerpolicy","no-referrer-when-downgrade");
+  f.setAttribute("allow","clipboard-read; clipboard-write; microphone; autoplay");
+  el.appendChild(f);
+})();&lt;/script&gt;</code></pre>
+          </div>
+          <!-- textarea avec le code brut à copier -->
+          <textarea id="codeA" style="position:absolute;left:-9999px;top:-9999px" aria-hidden="true">
+<!-- Betty Bot — Script plug-and-play -->
+<div id="bettybot-container" style="position:relative;width:100%;max-width:420px;height:620px;margin:0 auto"></div>
+<script>(function(){
+  var pid = "{{ public_id }}";
+  var buyer = "{{ buyer_email|default('', true)|urlencode }}";
+  var src = "{{ base_url }}/chat?public_id=" + encodeURIComponent(pid) + "&embed=1" + (buyer ? "&buyer_email=" + buyer : "");
+  var el = document.getElementById("bettybot-container");
+  var f = document.createElement("iframe");
+  f.src = src;
+  f.title = "{{ full_name }}";
+  f.style.cssText = "width:100%;height:100%;border:0;border-radius:16px;box-shadow:0 10px 30px rgba(0,0,0,.25);background:#0b0f1e;";
+  f.setAttribute("loading","lazy");
+  f.setAttribute("referrerpolicy","no-referrer-when-downgrade");
+  f.setAttribute("allow","clipboard-read; clipboard-write; microphone; autoplay");
+  el.appendChild(f);
+})();</script>
+          </textarea>
+          <div class="small">À coller dans un bloc HTML/Code. Idéal pour Wix / Webflow / Squarespace / WordPress.</div>
+        </div>
 
-    <code>
-&lt;!-- Betty Bot AI — intégration (Wix / Webflow / Squarespace / WordPress) --&gt;<br>
-&lt;div style="position:relative; width:100%; max-width:420px; height:620px; margin:0 auto;"&gt;<br>
-&nbsp;&nbsp;&lt;iframe<br>
-&nbsp;&nbsp;&nbsp;&nbsp;src="{{ base_url }}/chat?public_id={{ public_id }}&amp;embed=1{% if buyer_email %}&amp;buyer_email={{ buyer_email|urlencode }}{% endif %}"<br>
-&nbsp;&nbsp;&nbsp;&nbsp;title="{{ full_name }}"<br>
-&nbsp;&nbsp;&nbsp;&nbsp;style="width:100%; height:100%; border:0; border-radius:16px; box-shadow:0 10px 30px rgba(0,0,0,.25); background:#0b0f1e;"<br>
-&nbsp;&nbsp;&nbsp;&nbsp;loading="lazy"<br>
-&nbsp;&nbsp;&nbsp;&nbsp;referrerpolicy="no-referrer-when-downgrade"<br>
-&nbsp;&nbsp;&nbsp;&nbsp;allow="clipboard-read; clipboard-write; microphone; autoplay"&gt;<br>
-&nbsp;&nbsp;&lt;/iframe&gt;<br>
-&lt;/div&gt;
-    </code>
+        <!-- OPTION B — HTML PUR (iframe) -->
+        <div class="card">
+          <div class="code-title">
+            <h2 style="margin:0">Option B — HTML (iframe)</h2>
+            <button class="copy-btn" data-target="codeB">Copier</button>
+          </div>
+          <div class="code-block">
+            <pre><code id="codeB_view">&lt;!-- Betty Bot — Iframe --&gt;
+&lt;div style="position:relative;width:100%;max-width:420px;height:620px;margin:0 auto"&gt;
+  &lt;iframe
+    src="{{ base_url }}/chat?public_id={{ public_id }}&amp;embed=1{% if buyer_email %}&amp;buyer_email={{ buyer_email|urlencode }}{% endif %}"
+    title="{{ full_name }}"
+    style="width:100%;height:100%;border:0;border-radius:16px;box-shadow:0 10px 30px rgba(0,0,0,.25);background:#0b0f1e;"
+    loading="lazy"
+    referrerpolicy="no-referrer-when-downgrade"
+    allow="clipboard-read; clipboard-write; microphone; autoplay"&gt;
+  &lt;/iframe&gt;
+&lt;/div&gt;</code></pre>
+          </div>
+          <textarea id="codeB" style="position:absolute;left:-9999px;top:-9999px" aria-hidden="true">
+<!-- Betty Bot — Iframe -->
+<div style="position:relative;width:100%;max-width:420px;height:620px;margin:0 auto">
+  <iframe
+    src="{{ base_url }}/chat?public_id={{ public_id }}&embed=1{% if buyer_email %}&buyer_email={{ buyer_email|urlencode }}{% endif %}"
+    title="{{ full_name }}"
+    style="width:100%;height:100%;border:0;border-radius:16px;box-shadow:0 10px 30px rgba(0,0,0,.25);background:#0b0f1e;"
+    loading="lazy"
+    referrerpolicy="no-referrer-when-downgrade"
+    allow="clipboard-read; clipboard-write; microphone; autoplay">
+  </iframe>
+</div>
+          </textarea>
+          <div class="small">À coller tel quel dans n’importe quelle page HTML.</div>
+        </div>
+      </div>
+    </div>
 
-    <p class="small">
-      Copiez ce code dans la section HTML de votre page. Votre bot apparaîtra automatiquement avec toutes les informations de votre compte.
-    </p>
+    <!-- Prévisualisation live -->
+    <div class="card">
+      <h2>Prévisualisation du bot</h2>
+      <iframe
+        src="{{ base_url }}/chat?public_id={{ public_id }}&embed=1{% if buyer_email %}&buyer_email={{ buyer_email|urlencode }}{% endif %}"
+        title="{{ full_name }}"
+        loading="lazy"
+        referrerpolicy="no-referrer-when-downgrade"
+        allow="clipboard-read; clipboard-write; microphone; autoplay">
+      </iframe>
+    </div>
+
+    <div class="small">© {{ 2025 }} Spectra Media AI — généré pour {{ buyer_email }}</div>
   </div>
 
-  <div class="notif">
-    ✅ Les leads collectés par votre bot seront automatiquement envoyés à :<br>
-    <strong>{{ buyer_email }}</strong>
-  </div>
-
-  <div class="card">
-    <h2>Prévisualisation du bot</h2>
-    <iframe
-      src="{{ base_url }}/chat?public_id={{ public_id }}&embed=1{% if buyer_email %}&buyer_email={{ buyer_email|urlencode }}{% endif %}"
-      title="{{ full_name }}"
-      loading="lazy"
-      referrerpolicy="no-referrer-when-downgrade"
-      allow="clipboard-read; clipboard-write; microphone; autoplay">
-    </iframe>
-  </div>
-
-  <div class="small">© {{ 2025 }} Spectra Media AI — Généré automatiquement pour {{ buyer_email }}</div>
-
+  <script>
+    // Boutons "Copier" -> "Copié ✓" puis retour
+    document.querySelectorAll('.copy-btn').forEach(function(btn){
+      btn.addEventListener('click', function(){
+        var targetId = btn.getAttribute('data-target');
+        var ta = document.getElementById(targetId);
+        if(!ta) return;
+        ta.select();
+        ta.setSelectionRange(0, 999999);
+        try {
+          document.execCommand('copy');
+          var old = btn.textContent;
+          btn.textContent = 'Copié ✓';
+          btn.style.borderColor = 'rgba(16,185,129,.7)';
+          setTimeout(function(){
+            btn.textContent = old;
+            btn.style.borderColor = 'rgba(255,255,255,.15)';
+          }, 2000);
+        } catch(e) {
+          alert('Impossible de copier automatiquement. Copiez manuellement.');
+        }
+      });
+    });
+  </script>
 </body>
 </html>
