@@ -690,43 +690,40 @@ Rôle et contenu attendus :
     else:
         session[f"conv_{public_id or bot_key}"] = history
 
-    # Envoi e-mail si lead "ready"
+        # Envoi e-mail si lead "ready" (règle UNIQUE : téléphone + nom complet + email)
     debug_to = None
-    if lead and isinstance(lead, dict):
-        if (bot.get("pack") == "medecin"):
-            stage_ok = (
-                lead.get("stage") == "ready"
-                and bool(lead.get("email"))
-                and bool(lead.get("name"))
-                and bool(lead.get("reason"))
-            )
-        else:
-            stage_ok = (
-                lead.get("stage") == "ready"
-                and bool(lead.get("name"))
-                and bool(lead.get("reason"))
-                and (lead.get("email") or lead.get("phone"))
-            )
+    if True:
+        # Si la balise n'est pas revenue, on reconstruit depuis l'historique + dernier input
+        if not lead or not isinstance(lead, dict):
+            lead = _lead_from_history(history + [{"role": "user", "content": user_input}])
 
+        stage_ok = bool(lead.get("phone")) and bool(lead.get("name")) and bool(lead.get("email"))
         if stage_ok:
             buyer_email = (
-                (bot or {}).get("buyer_email")
-                or ((db_get_bot(public_id) or {}).get("buyer_email") if public_id else None)
+                ((db_get_bot(public_id) or {}).get("buyer_email") if public_id else None)
+                or (bot or {}).get("buyer_email")
                 or payload.get("buyer_email")
                 or buyer_email_ctx
                 or os.getenv("DEFAULT_LEAD_EMAIL")
             )
+
             if not buyer_email:
                 app.logger.warning(
-                    f"[LEAD] Aucun buyer_email pour bot_id={public_id or 'N/A'} ; "
-                    f"lead enregistré mais email non envoyé."
+                    f"[LEAD] buyer_email introuvable pour bot_id={public_id or 'N/A'} ; email non envoyé."
                 )
             else:
                 try:
                     send_lead_email(
                         to_email=buyer_email,
-                        lead=lead,
-                        bot_name=(bot or {}).get("name") or "Betty Bot"
+                        lead={
+                            "reason": lead.get("reason", ""),
+                            "name": lead.get("name", ""),
+                            "email": lead.get("email", ""),
+                            "phone": lead.get("phone", ""),
+                            "availability": lead.get("availability", ""),
+                            "stage": "ready",
+                        },
+                        bot_name=(bot or {}).get("name") or "Betty Bot",
                     )
                     app.logger.info(f"[LEAD] Email envoyé à {buyer_email} pour bot {public_id}")
                 except Exception as e:
