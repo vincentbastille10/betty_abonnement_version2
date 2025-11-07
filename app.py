@@ -615,6 +615,8 @@ def bettybot_reply():
         full_text = rule_based_next_question(bot.get("pack",""), history + [{"role":"user","content": user_input}])
 
     response_text, lead = extract_lead_json(full_text)
+    # sécurité: si un tag traîne encore, on le supprime côté serveur
+    response_text = re.sub(r"<LEAD_JSON>.*?</LEAD_JSON>\s*$", "", response_text or "", flags=re.DOTALL).rstrip()
 
     # maj historique
     history.append({"role": "user", "content": user_input})
