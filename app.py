@@ -554,7 +554,7 @@ def chat_page():
         "notaire": "Notaire",
     }
     pack_label = pack_label_map.get(pack_code, "")
-    full_name = f"{display_name} ({pack_label})" if pack_label else display_name
+    full_name = display_name if "(" in display_name else (f"{display_name} ({pack_label})" if pack_label else display_name)
 
     return render_template(
         "chat.html",
