@@ -239,15 +239,18 @@ def call_llm_with_history(system_prompt: str, history: list, user_input: str) ->
     return ""
 
 # ======= Parsing & fallback =======
-LEAD_TAG_RE = re.compile(r"<LEAD_JSON>(\{.*?\})</LEAD_JSON>\s*$", re.DOTALL)
+# ======= Parsing & fallback (communs à tous les packs) =======
+# Tolère espaces et backticks éventuels autour de la balise, et capture proprement le JSON
+LEAD_TAG_RE = re.compile(r"`?\s*<LEAD_JSON>\s*(\{.*?\})\s*</LEAD_JSON>\s*`?\s*$", re.DOTALL)
 
 def extract_lead_json(text: str):
+    """Retourne (message_sans_tag, lead_dict_ou_None). Ne casse jamais l'affichage côté client."""
     if not text:
         return text, None
     m = LEAD_TAG_RE.search(text)
     if not m:
         return text, None
-    lead_raw = m.group(1)
+    lead_raw = m.group(1).strip()
     message = text[:m.start()].rstrip()
     try:
         lead = json.loads(lead_raw)
@@ -255,62 +258,55 @@ def extract_lead_json(text: str):
         lead = None
     return message, lead
 
-def parse_contact_info(text: str) -> dict:
-    if not text:
-        return {}
-    d = {}
-    m = re.search(r'(\+?\d[\d\s\.\-]{6,})', text);                   d["phone"]   = m.group(1) if m else None
-    m = re.search(r'[\w\.-]+@[\w\.-]+\.\w+', text);                  d["email"]   = m.group(0) if m else None
-    m = re.search(r'horaires?\s*:\s*(.+)', text, re.I);              d["hours"]   = m.group(1).strip() if m else None
-    m = re.search(r'(rue|avenue|bd|boulevard|place).+', text, re.I); d["address"] = m.group(0).strip() if m else None
-    m = re.search(r'(nom|cabinet|agence)\s*:\s*(.+)', text, re.I);   d["name"]    = m.group(2).strip() if m else None
-    return {k: v for k, v in d.items() if v}
-
 def _lead_from_history(history: list) -> dict:
-    text = " ".join([m["content"] for m in history if m.get("role") == "user"])
-    d = {"reason": None, "email": None, "phone": None, "name": None, "availability": None}
-    if not text:
+    """Analyse simple et robuste de l'historique utilisateur pour reconstruire un lead si le modèle oublie le JSON."""
+    user_text = " ".join([m["content"] for m in history if m.get("role") == "user"]) or ""
+    d = {"reason": "", "email": "", "phone": "", "name": "", "availability": "", "stage": "collecting"}
+
+    if not user_text:
         return d
-    m = re.search(r'[\w\.-]+@[\w\.-]+\.\w+', text);                  d["email"] = m.group(0) if m else None
-    m = re.search(r'(\+?\d[\d\s\.\-]{6,})', text);                   d["phone"] = m.group(1) if m else None
-    m = re.search(r'(?:je|j’|j\')?\s*(?:souhaite|veux|voudrais|besoin|motif|pour)\s*:?(.{5,120})', text, re.I)
-    d["reason"] = (m.group(1).strip() if m else None)
-    m = re.search(r'(?:je m’appelle|je m\'appelle|nom\s*:?)\s*([A-Za-zÀ-ÖØ-öø-ÿ\'\-\s]{2,60})', text, re.I)
-    d["name"] = (m.group(1).strip() if m else None)
-    m = re.search(r'(?:disponibilités?|créneau|demain|matin|après-midi|soir|lundi|mardi|mercredi|jeudi|vendredi)\s*([^\.!?]{0,60})', text, re.I)
-    d["availability"] = (m.group(0).strip() if m else None)
+
+    # Email
+    m = re.search(r'[\w\.-]+@[\w\.-]+\.\w+', user_text)
+    if m: d["email"] = m.group(0)
+
+    # Téléphone (tolérant aux espaces/points/tirets)
+    m = re.search(r'(\+?\d[\d \.\-]{6,})', user_text)
+    if m: d["phone"] = m.group(1).strip()
+
+    # Nom complet
+    m = re.search(r'(?:je m(?:’|\'|e)appelle|nom\s*:?)\s*([A-Za-zÀ-ÖØ-öø-ÿ\'\-\s]{2,80})', user_text, re.I)
+    if m: d["name"] = m.group(1).strip()
+
+    # Motif (raison) – on prend une courte portion si elle est repérable
+    m = re.search(r'(?:souhaite|veux|voudrais|besoin|motif|pour)\s*:?(.{5,140})', user_text, re.I)
+    if m: d["reason"] = m.group(1).strip()
+
+    # Disponibilités (faible priorité dans ton flux)
+    m = re.search(r'(demain|matin|après-midi|soir|lundi|mardi|mercredi|jeudi|vendredi)[^\.!?]{0,60}', user_text, re.I)
+    if m: d["availability"] = m.group(0).strip()
+
+    # Règle unique : ready si TÉLÉPHONE + NOM COMPLET + EMAIL
+    if d["phone"] and d["name"] and d["email"]:
+        d["stage"] = "ready"
     return d
 
 def rule_based_next_question(pack: str, history: list) -> str:
+    """Secours 100% pack-agnostique : impose l'ordre Tél → Nom complet → Email."""
     lead = _lead_from_history(history)
-    pack = (pack or "").lower()
-    need_email_strict = (pack == "medecin")
 
-    if not lead["reason"]:
-        msg = "Merci. Pouvez-vous préciser en une phrase le motif de votre demande ?"
-    elif need_email_strict and not lead["email"]:
-        msg = "Merci. Pour vous recontacter, quelle est votre adresse e-mail ?"
-    elif not (lead["email"] or lead["phone"]):
-        msg = "Merci. Pour vous recontacter, plutôt un numéro de téléphone ou une adresse e-mail ?"
+    if not lead["phone"]:
+        msg = "Quel est votre numéro de téléphone ?"
     elif not lead["name"]:
-        msg = "Merci. Quel est votre nom complet ?"
-    elif not lead["availability"]:
-        msg = "Avez-vous des disponibilités à me suggérer (par exemple demain matin) ?"
+        msg = "Quel est votre nom et prénom complets ?"
+    elif not lead["email"]:
+        msg = "Quelle est votre adresse e-mail ?"
     else:
-        msg = "Parfait, je transmets au cabinet pour vous proposer un créneau."
+        msg = "Parfait, je transmets vos coordonnées. Vous serez rappelé rapidement."
+        lead["stage"] = "ready"
 
-    ready = (lead["reason"] and lead["name"] and ((lead["email"] and (not need_email_strict or need_email_strict)) or lead["phone"]))
-    stage = "ready" if ready and (lead["email"] if need_email_strict else (lead["email"] or lead["phone"])) else "collecting"
-
-    ljson = {
-        "reason": lead["reason"] or "",
-        "name": lead["name"] or "",
-        "email": lead["email"] or "",
-        "phone": lead["phone"] or "",
-        "availability": lead["availability"] or "",
-        "stage": stage
-    }
-    return f"{msg}\n<LEAD_JSON>{json.dumps(ljson, ensure_ascii=False)}</LEAD_JSON>"
+    # Balise unique (une ligne)
+    return f"{msg}\n<LEAD_JSON>{json.dumps(lead, ensure_ascii=False)}</LEAD_JSON>"
 
 # ======= Envoi e-mail lead =======
 def send_lead_email(to_email: str, lead: dict, bot_name: str = "Betty Bot"):
