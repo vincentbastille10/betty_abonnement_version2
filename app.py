@@ -1,11 +1,10 @@
 # app.py
 from __future__ import annotations
-from flask import Flask, render_template, request, jsonify, redirect, url_for, session
-import os, yaml, requests, re, stripe, json, uuid, hashlib, sqlite3, time
+from flask import Flask, render_template, request, jsonify, redirect, url_for, session, send_from_directory, Response
+import os, yaml, requests, re, stripe, json, uuid, hashlib, sqlite3, time, base64
 from pathlib import Path
 from contextlib import contextmanager
 from urllib.parse import urlparse, parse_qs
-
 
 app = Flask(__name__)
 app.secret_key = os.getenv("FLASK_SECRET_KEY", "dev-secret-change-me")
@@ -38,7 +37,7 @@ MJ_FROM_NAME  = os.getenv("MJ_FROM_NAME", "Spectra Media AI").strip()
 app.jinja_env.globals["BASE_URL"] = BASE_URL
 
 # =========================
-# DB SQLite (persistant) — /tmp en serverless, data/app.db en local
+# DB SQLite
 # =========================
 def pick_db_path() -> Path:
     env_forced = os.getenv("DB_PATH")
@@ -126,7 +125,7 @@ def db_get_bot(public_id: str):
             d["profile"] = {}
     return d
 
-# init DB au cold start
+# init DB
 db_init()
 
 # =========================
@@ -164,7 +163,6 @@ def build_system_prompt(pack_name: str, profile: dict, greeting: str = "") -> st
     base = load_pack_prompt(pack_name)
     biz  = build_business_block(profile)
 
-    # Règles spécifiques : pour le pack "medecin", l'EMAIL PATIENT est OBLIGATOIRE avant stage=ready
     if (pack_name or "").lower() == "medecin":
         qualif_order = "**motif**, **email (OBLIGATOIRE)**, **téléphone**, **nom complet**, **disponibilités**"
         ready_rule   = '— `stage = "ready"` uniquement si **motif + nom + email**.'
@@ -202,21 +200,15 @@ RÈGLES SUPPLÉMENTAIRES (QUALIF LEAD) :
 
 # ======= LLM avec retry exponentiel =======
 def call_llm_with_history(system_prompt: str, history: list, user_input: str) -> str:
-    """
-    Appel Together avec retry exponentiel.
-    Retourne une string de réponse SANS lever d'exception.
-    En cas d'indisponibilité persistante, renvoie "" (pour déclencher le fallback).
-    """
     if not TOGETHER_API_KEY:
-        return ""  # force le fallback si pas de clé
-
+        return ""
     headers = {"Authorization": f"Bearer {TOGETHER_API_KEY}", "Content-Type": "application/json"}
     messages = [{"role": "system", "content": system_prompt}]
     messages.extend(history or [])
     messages.append({"role": "user", "content": user_input})
     payload = {"model": LLM_MODEL, "max_tokens": LLM_MAX_TOKENS, "temperature": 0.4, "messages": messages}
 
-    backoffs = [0.6, 1.2, 2.4, 4.8]  # 4 tentatives
+    backoffs = [0.6, 1.2, 2.4, 4.8]
     last_err_text = None
 
     for wait in backoffs:
@@ -239,7 +231,7 @@ def call_llm_with_history(system_prompt: str, history: list, user_input: str) ->
         time.sleep(wait)
 
     print("[LLM][Together][FAIL]", last_err_text or "unknown")
-    return ""  # vide => signal au fallback
+    return ""
 
 # ======= Parsing & fallback =======
 LEAD_TAG_RE = re.compile(r"<LEAD_JSON>(\{.*?\})</LEAD_JSON>\s*$", re.DOTALL)
@@ -349,7 +341,7 @@ def send_lead_email(to_email: str, lead: dict, bot_name: str = "Betty Bot"):
         print("[LEAD][MAILJET][EXC]", type(e).__name__, e)
 
 # =========================
-# MINI-DB (seed mémoire pour defaults)
+# MINI-DB (seed)
 # =========================
 BOTS = {
     "avocat-001":  {"pack":"avocat","name":"Betty Bot (Avocat)","color":"#4F46E5","avatar_file":"avocat.jpg","profile":{},"greeting":"","buyer_email":None,"owner_name":None,"public_id":None},
@@ -381,11 +373,11 @@ def find_bot_by_public_id(public_id: str):
     b2 = dict(b); b2["bot_key"] = bot_key; b2["public_id"] = public_id
     return bot_key, b2
 
-# Mémoire de conversations côté serveur (fallback si cookies bloqués + conv_id côté client)
+# Mémoire de conversations
 CONVS = {}  # key: conv_id -> list[{"role": "...", "content": "..."}]
 
 # =========================
-# PAGES
+# ROUTES PAGES
 # =========================
 @app.route("/")
 def index():
@@ -458,12 +450,18 @@ def inscription_page():
         return redirect(session_obj.url, code=303)
     return render_template("inscription.html", title="Inscription")
 
+def _slug_from_pack(pack: str) -> str:
+    pack = (pack or "").lower()
+    return {"agent_immobilier":"immo", "immobilier":"immo", "avocat":"avocat", "medecin":"medecin"}.get(pack, "immo")
+
 @app.route("/recap")
 def recap_page():
+    # lecture paramètres
     pack = request.args.get("pack", "avocat")
-    public_id = request.args.get("public_id", "").strip()
-    bot = db_get_bot(public_id) if public_id else None
+    public_id = (request.args.get("public_id") or "").strip()
 
+    # récup bot
+    bot = db_get_bot(public_id) if public_id else None
     if not bot:
         key = "avocat-001" if pack == "avocat" else ("medecin-003" if pack == "medecin" else "immo-002")
         base = BOTS[key]
@@ -471,37 +469,48 @@ def recap_page():
             "public_id": public_id or f"{key}-demo",
             "name": base["name"],
             "owner_name": "Client",
-            "buyer_email": "",     # fallback vide
-            "pack": base["pack"]
+            "buyer_email": "",
+            "pack": base["pack"],
+            "color": base["color"],
+            "avatar_file": base["avatar_file"],
+            "greeting": ""
         }
 
+    # construire cfg attendu par recap.html
+    slug = _slug_from_pack(bot.get("pack") or pack)
+    avatar_file = bot.get("avatar_file") or f"logo-{slug}.jpg"
+    cfg = {
+        "pack": bot.get("pack") or pack,
+        "color": bot.get("color") or "#4F46E5",
+        "greeting": bot.get("greeting") or "Bonjour, je suis Betty. Comment puis-je vous aider ?",
+        "contact": "",
+        "px": request.args.get("px") if request.args.get("px") is not None else "0.5",
+        "py": request.args.get("py") if request.args.get("py") is not None else "0.5",
+        "avatar_url": static_url(avatar_file),
+        "public_id": bot.get("public_id") or "",
+        "buyer_email": bot.get("buyer_email") or ""
+    }
+
+    # variables pour titres éventuels
     display   = bot.get("name") or "Betty Bot"
     owner     = bot.get("owner_name") or ""
     full_name = f"{display} — {owner}" if owner else display
 
-    buyer_email = bot.get("buyer_email") or ""      # <-- IMPORTANT
-    avatar_file = bot.get("avatar_file") or "avocat.jpg"
-
     return render_template(
         "recap.html",
         title="Récapitulatif",
+        cfg=cfg,              # <<< clé attendue par le template
+        info=cfg,             # <<< miroir (si le template utilise 'info')
         base_url=BASE_URL,
-        pack=pack,
-        public_id=bot.get("public_id") or "",
-        full_name=full_name,
-        buyer_email=buyer_email,                     # <-- IMPORTANT
-        avatar_url=static_url(avatar_file)
+        full_name=full_name
     )
-
-
 
 @app.route("/chat")
 def chat_page():
-    # Iframe embarqué : /chat?public_id=...&embed=1
     public_id = (request.args.get("public_id") or "").strip()
     embed     = request.args.get("embed", "0") == "1"
     buyer_email = request.args.get("buyer_email", "").strip()
-    
+
     bot = db_get_bot(public_id)
     if not bot:
         base = BOTS["avocat-001"]
@@ -529,18 +538,18 @@ def chat_page():
     full_name = f"{display_name} ({pack_label})" if pack_label else display_name
 
     return render_template(
-    "chat.html",
-    title="Betty — Chat",
-    base_url=BASE_URL,
-    public_id=bot.get("public_id") or "",
-    full_name=full_name,                          # garde-le si tu l’utilises ailleurs
-    header_title="Betty Bot, votre assistante AI",# <-- AJOUT
-    color=bot.get("color") or "#4F46E5",
-    avatar_url=static_url(bot.get("avatar_file") or "avocat.jpg"),
-    greeting=bot.get("greeting") or "Bonjour, je suis Betty. Comment puis-je vous aider ?",
-    embed=embed
-)
-
+        "chat.html",
+        title="Betty — Chat",
+        base_url=BASE_URL,
+        public_id=bot.get("public_id") or "",
+        full_name=full_name,
+        header_title="Betty Bot, votre assistante AI",
+        color=bot.get("color") or "#4F46E5",
+        avatar_url=static_url(bot.get("avatar_file") or "avocat.jpg"),
+        greeting=bot.get("greeting") or "Bonjour, je suis Betty. Comment puis-je vous aider ?",
+        buyer_email=buyer_email,
+        embed=embed
+    )
 
 # =========================
 # API
@@ -560,7 +569,7 @@ def bettybot_reply():
         bot_key = "avocat-001"
         bot = BOTS[bot_key]
 
-    # Historique : conv_id (localStorage) > cookies Flask
+    # Historique
     if conv_id:
         history = CONVS.get(conv_id, [])
     else:
@@ -568,7 +577,7 @@ def bettybot_reply():
         history = session.get(key, [])
     history = history[-6:]
 
-    # --- buyer_email depuis payload OU URL du /chat dans l’iframe (via Referer)
+    # buyer_email via payload ou referrer
     referrer = request.referrer or ""
     q = parse_qs(urlparse(referrer).query) if referrer else {}
     buyer_email_ctx = (payload.get("buyer_email") or q.get("buyer_email", [None])[0] or "").strip()
@@ -576,7 +585,6 @@ def bettybot_reply():
         f"[DBG] buyer_email(payload='{payload.get('buyer_email')}'; ref='{q.get('buyer_email',[None])[0]}') pid='{public_id}'"
     )
 
-    # Prompt LLM
     system_prompt = build_system_prompt(
         bot.get("pack", "avocat"),
         bot.get("profile", {}),
@@ -584,7 +592,7 @@ def bettybot_reply():
     )
 
     full_text = call_llm_with_history(system_prompt=system_prompt, history=history, user_input=user_input)
-    if not full_text:  # Together KO -> fallback rule-based
+    if not full_text:
         full_text = rule_based_next_question(bot.get("pack",""), history + [{"role":"user","content": user_input}])
 
     response_text, lead = extract_lead_json(full_text)
@@ -599,7 +607,6 @@ def bettybot_reply():
 
     # Envoi e-mail si lead "ready"
     debug_to = None
-       # Envoi e-mail si lead "ready"
     if lead and isinstance(lead, dict):
         if (bot.get("pack") == "medecin"):
             stage_ok = (
@@ -616,10 +623,7 @@ def bettybot_reply():
                 and (lead.get("email") or lead.get("phone"))
             )
 
-        # --- ENVOI EMAIL LEAD (version robuste) -------------------------------------
-        # stage_ok == True si le JSON de lead est complet (stage == "ready")
         if stage_ok:
-            # 1) Cherche l'email du propriétaire dans tous les emplacements possibles
             buyer_email = (
                 (bot or {}).get("buyer_email")
                 or ((db_get_bot(public_id) or {}).get("buyer_email") if public_id else None)
@@ -627,8 +631,6 @@ def bettybot_reply():
                 or buyer_email_ctx
                 or os.getenv("DEFAULT_LEAD_EMAIL")
             )
-
-            # 2) Log clair si aucun email n'a été trouvé
             if not buyer_email:
                 app.logger.warning(
                     f"[LEAD] Aucun buyer_email pour bot_id={public_id or 'N/A'} ; "
@@ -636,25 +638,21 @@ def bettybot_reply():
                 )
             else:
                 try:
-                    # 3) Envoi du mail de lead
                     send_lead_email(
                         to_email=buyer_email,
-                        lead=lead,                           # dict: reason/name/email/phone/availability...
+                        lead=lead,
                         bot_name=(bot or {}).get("name") or "Betty Bot"
                     )
                     app.logger.info(f"[LEAD] Email envoyé à {buyer_email} pour bot {public_id}")
                 except Exception as e:
                     app.logger.exception(f"[LEAD] Erreur envoi email -> {e}")
-        # ---------------------------------------------------------------------------
-
-
-
 
     return jsonify({
         "response": response_text,
         "stage": (lead or {}).get("stage") if lead else None,
         "debug_to": debug_to
     })
+
 @app.route("/api/embed_meta")
 def embed_meta():
     public_id = (request.args.get("public_id") or "").strip()
@@ -672,12 +670,11 @@ def embed_meta():
         "greeting": bot.get("greeting") or "Bonjour, je suis Betty. Comment puis-je vous aider ?",
         "buyer_email": bot.get("buyer_email") or ""
     })
+
 @app.route("/api/bot_meta")
 def bot_meta():
-    # Accepte bot_id (clé simple) OU public_id (clé longue)
     bot_id = (request.args.get("bot_id") or request.args.get("public_id") or "").strip()
 
-    # 1) Si on reçoit une clé simple (ex: "avocat-001")
     if bot_id in BOTS:
         b = BOTS[bot_id]
         return jsonify({
@@ -687,7 +684,6 @@ def bot_meta():
             "greeting": b.get("greeting") or "Bonjour, je suis Betty. Comment puis-je vous aider ?"
         })
 
-    # 2) Sinon on tente comme un public_id
     _, bot = find_bot_by_public_id(bot_id)
     if not bot:
         return jsonify({"error": "bot_not_found"}), 404
@@ -710,14 +706,11 @@ def reset_conv():
         CONVS.pop(key, None)
     return jsonify({"ok": True})
 
-# --- TEST MAILJET (diagnostic simple) ---
 @app.route("/api/test_mailjet")
 def test_mailjet():
     to = (request.args.get("to") or os.getenv("TEST_TO_EMAIL") or "").strip()
     if not to:
         return jsonify({"ok": False, "error": "missing 'to' param"}), 400
-
-    # payload de test minimal
     lead = {
         "reason": "Test automatique",
         "name": "Lead Test",
@@ -729,6 +722,47 @@ def test_mailjet():
     send_lead_email(to, lead, bot_name="Betty Bot (test)")
     return jsonify({"ok": True, "to": to})
 
+# =========================
+# ROUTES UTILITAIRES (anti-404)
+# =========================
+@app.route("/avatar/<slug>")
+def avatar(slug: str):
+    """Serve /static/logo-<slug>.jpg si présent, sinon un 1px transparent."""
+    static_dir = os.path.join(app.root_path, "static")
+    filename = f"logo-{slug}.jpg"
+    path = os.path.join(static_dir, filename)
+    if os.path.exists(path):
+        return send_from_directory(static_dir, filename)
+    # 1x1 transparent PNG
+    transparent_png = base64.b64decode(
+        "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+Xad8AAAAASUVORK5CYII="
+    )
+    return Response(transparent_png, mimetype="image/png")
+
+@app.route("/favicon-16x16.png")
+def fav16():
+    p = os.path.join(app.root_path, "static", "favicon-16x16.png")
+    if os.path.exists(p):
+        return send_from_directory(os.path.dirname(p), os.path.basename(p))
+    return "", 204
+
+@app.route("/favicon-32x32.png")
+def fav32():
+    p = os.path.join(app.root_path, "static", "favicon-32x32.png")
+    if os.path.exists(p):
+        return send_from_directory(os.path.dirname(p), os.path.basename(p))
+    return "", 204
+
+@app.route("/site.webmanifest")
+def site_manifest():
+    p = os.path.join(app.root_path, "static", "site.webmanifest")
+    if os.path.exists(p):
+        return send_from_directory(os.path.dirname(p), os.path.basename(p))
+    # mini manifest par défaut
+    return jsonify({"name":"Betty Bots","short_name":"Betty","icons":[]}), 200
+
+# =========================
+# MAIN
+# =========================
 if __name__ == "__main__":
-    # Dev local : mettre SESSION_SECURE=False pour autoriser cookies non-HTTPS
     app.run(host="0.0.0.0", port=5000, debug=True)
