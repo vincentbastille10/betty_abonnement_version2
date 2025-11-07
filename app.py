@@ -618,6 +618,7 @@ def bettybot_reply():
     )
 
      # --- Persona : démo (index) vs bots achetés ---
+        # --- Persona : démo (index) vs bots achetés ---
     demo_mode = (public_id == "spectra-demo")
 
     if demo_mode:
@@ -628,14 +629,14 @@ Objectif unique : expliquer comment **créer, configurer et intégrer** un bot m
 
 Rôle et contenu attendus :
 - Accueil chaleureux (ex. « Bonjour et bienvenue chez Spectra Media »).
-- Expliquer ce qu’est un **bot métier** et la **qualification de lead** : collecte structurée du motif, nom, e-mail/téléphone, disponibilités, pour gagner du temps.
-- Préciser que **chaque lead qualifié est automatiquement envoyé à l’adresse e-mail utilisée lors de l’inscription**.
+- Expliquer ce qu’est un **bot métier** et la **qualification de lead** : collecte du motif, nom, e-mail/téléphone, disponibilités.
+- Préciser que **chaque lead qualifié est envoyé à l’e-mail utilisé lors de l’inscription**.
 - Guider la création : 1) configurer (couleur, avatar, message, coordonnées), 2) payer (Stripe), 3) récupérer le **script d’intégration** (Wix/WordPress/Webflow), 4) coller sur le site.
-- Si l’utilisateur dit « je veux acheter / me créer un bot », donner les **étapes concrètes** et proposer d’ouvrir la page de configuration.
-- Style : clair, concis, **2 phrases max par message**, **une question à la fois**, ton bienveillant.
-- Ne pas donner de conseils juridiques/médicaux : tu es en **mode présentation produit**.
+- Si l’utilisateur dit « je veux acheter / créer un bot », donner les **étapes concrètes** et proposer d’ouvrir la page de configuration.
+- Style : clair, concis, **2 phrases max**, **une question à la fois**, ton bienveillant.
+- Ne donne **aucun avis juridique/médical** : tu es en **mode présentation produit**.
 
-Ajoute à la toute fin de chacun de tes messages, sur une seule ligne (sans mise en forme code) :
+À la fin de chacun de tes messages (sur UNE ligne, sans mise en forme code) :
 <LEAD_JSON>{"reason": "", "name": "", "email": "", "phone": "", "availability": "", "stage": "collecting"}</LEAD_JSON>
 """.strip()
     else:
@@ -643,7 +644,6 @@ Ajoute à la toute fin de chacun de tes messages, sur une seule ligne (sans mise
             bot.get("pack", "avocat"),
             bot.get("profile", {}),
             bot.get("greeting", "")
-    
         )
 
 
