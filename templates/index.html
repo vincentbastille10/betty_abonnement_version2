@@ -254,7 +254,11 @@
       });
       const j = await r.json();
       hideTyping(typing);
-      addBubble(j.response || "Désolé, une erreur est survenue.");
+      const cleaned = String(j.response || "")
+        .replace(/<LEAD_JSON>[\s\S]*<\/LEAD_JSON>\s*$/,'')
+        .trim();
+      addBubble(cleaned || "Désolé, une erreur est survenue.");
+
     } catch {
       hideTyping(typing);
       addBubble("Désolé, une erreur est survenue.");
@@ -265,4 +269,5 @@
 </script>
 
 {% endblock %}
+
 
