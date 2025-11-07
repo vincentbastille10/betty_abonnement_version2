@@ -432,7 +432,29 @@ CONVS = {}  # key: conv_id -> list[{"role": "...", "content": "..."}]
 # =========================
 @app.route("/")
 def index():
-    return render_template("index.html", title="Découvrez Betty")
+    try:
+        return render_template("index.html", title="Découvrez Betty")
+    except TemplateNotFound:
+        # Fallback ultra-léger pour éviter tout crash si le template n’est pas présent dans le déploiement
+        return """
+        <!doctype html><meta charset="utf-8">
+        <style>
+          body{margin:0;background:#0b0f1e;color:#e8ecff;font:16px/1.5 system-ui,Segoe UI,Roboto,Inter,sans-serif;display:grid;place-items:center;height:100vh}
+          .card{background:#12172a;border:1px solid rgba(255,255,255,.08);border-radius:16px;padding:28px;max-width:720px;box-shadow:0 10px 30px rgba(0,0,0,.25)}
+          h1{margin:0 0 12px;font-size:22px}
+          code{background:#0b1222;padding:2px 6px;border-radius:6px}
+          a{color:#8ab4ff;text-decoration:none}
+          .muted{color:#a8b2c8}
+        </style>
+        <div class="card">
+          <h1>Betty Bots — déploiement minimal</h1>
+          <p class="muted">Le template <code>templates/index.html</code> n’a pas été trouvé dans ce déploiement.<br>
+          Le fallback s’affiche pour empêcher le crash.</p>
+          <p>Vérifie que le fichier est bien <b>commit</b> et <b>poussé</b> : <code>templates/index.html</code>.</p>
+          <p>Interface de config : <a href="/config">/config</a></p>
+        </div>
+        """, 200
+
 
 # =========================
 # PAGE DE CONFIGURATION DU BOT
