@@ -715,6 +715,15 @@ def embed_meta():
 @app.route("/api/bot_meta")
 def bot_meta():
     bot_id = (request.args.get("bot_id") or request.args.get("public_id") or "").strip()
+    # --- CAS SPÉCIAL : démo de la home ---
+    if bot_id == "spectra-demo":
+        b = BOTS["spectra-demo"]
+        return jsonify({
+            "name": "Betty Bot (Spectra Media)",
+            "color_hex": b.get("color") or "#4F46E5",
+            "avatar_url": static_url(b.get("avatar_file") or "avocat.jpg"),
+            "greeting": b.get("greeting") or "Bonjour et bienvenue chez Spectra Media. Souhaitez-vous créer votre Betty Bot métier ?"
+        })
 
     # DEMO (index) : ids en seed
     if bot_id in BOTS:
