@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Récapitulatif — Betty Abonnement</title>
 
-  <!-- Fallbacks pour éviter les 404 manifest/icônes si pas encore fournis -->
+  <!-- Fallbacks assets (évite 404) -->
   <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png">
   <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png">
   <link rel="manifest" href="/site.webmanifest">
@@ -45,14 +45,7 @@
       width:36px; height:36px; border-radius:10px; background:var(--brand);
       box-shadow:0 6px 18px rgba(79,70,229,.35);
     }
-    .pill{
-      display:inline-flex; gap:8px; align-items:center;
-      border:1px solid var(--line); padding:6px 10px; border-radius:999px; color:var(--muted);
-      background:linear-gradient(180deg, #0c1120 0%, #0b0f1b 100%); text-decoration:none;
-    }
-    .grid{
-      display:grid; gap:16px; grid-template-columns: 1.2fr .8fr;
-    }
+    .grid{ display:grid; gap:16px; grid-template-columns: 1.1fr .9fr; }
     @media (max-width: 920px){ .grid{grid-template-columns: 1fr;} }
 
     .card{
@@ -70,20 +63,7 @@
       box-shadow:0 10px 26px rgba(79,70,229,.25);
     }
     .info-list{display:grid; gap:10px}
-    .row{display:flex; gap:12px; align-items:center; flex-wrap:wrap}
     .badge{display:inline-block; padding:4px 10px; border-radius:999px; background:#0f172a; border:1px solid #1d2735; color:#cfe3ff}
-    .cta{display:flex; gap:12px; flex-wrap:wrap; margin-top:10px}
-    .btn{
-      appearance:none; border:none; cursor:pointer; text-decoration:none;
-      background:var(--brand); color:#fff; padding:12px 16px; border-radius:12px; font-weight:700;
-      box-shadow:0 8px 18px rgba(79,70,229,.35);
-    }
-    .btn.secondary{
-      background:transparent; border:1px solid #263142; color:#d8e1f0;
-    }
-    .btn.ghost{
-      background:#0f1420; border:1px dashed #28354a; color:#bcd0f2;
-    }
 
     details.grp{border:1px solid var(--line); border-radius:12px; overflow:hidden}
     details.grp + details.grp{margin-top:12px}
@@ -98,12 +78,10 @@
     .two{display:grid; gap:12px; grid-template-columns:1fr 1fr}
     @media (max-width: 760px){ .two{grid-template-columns:1fr} }
 
-    .hint{font-size:13px; color:#93a3bf}
     .mono{font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace}
-    pre.json{margin:0; padding:14px; border-radius:12px; background:#0a0f19; color:#d7e7ff; border:1px solid #1b2736; overflow:auto}
-    code.inline{background:#0c1322; padding:2px 6px; border-radius:6px; border:1px solid #1c283a}
-
-    .ok{color:var(--ok)} .warn{color:var(--warn)} .err{color:var(--err)}
+    pre.code{margin:0; padding:14px; border-radius:12px; background:#0a0f19; color:#d7e7ff; border:1px solid #1b2736; overflow:auto}
+    .hint{font-size:13px; color:#93a3bf}
+    .ok{color:var(--ok)}
     .divider{height:1px; border:none; border-top:1px dashed #243148; margin:16px 0}
     footer{margin-top:28px; display:flex; justify-content:space-between; gap:12px; color:#8fa3c6; font-size:13px}
     .r{text-align:right}
@@ -111,207 +89,92 @@
 </head>
 <body>
   <div class="wrap">
-
     <header class="top">
       <div class="logo">
         <div class="logo-badge" aria-hidden="true"></div>
         <div>Betty — <span style="opacity:.85">Abonnement</span></div>
       </div>
-      <nav class="row">
-        <a class="pill" href="/inscription">Modifier</a>
-        <a class="pill" href="/config">Config</a>
-        <a class="pill" href="/pay">Paiement</a>
-      </nav>
+      <!-- (rien à droite : pas de payer/modifier/preview/config en post-paiement) -->
     </header>
 
-    <!-- Bandeau d’état -->
+    <!-- Bandeau succès -->
     <div class="card" style="display:flex;align-items:center;gap:12px;margin-bottom:16px">
       <div style="width:10px;height:10px;border-radius:50%;background:var(--ok);box-shadow:0 0 0 4px rgba(16,185,129,.18)"></div>
-      <div style="font-weight:700">Récapitulatif prêt</div>
-      <div class="hint">Inutile d’être parfait : vous pouvez encore modifier avant paiement.</div>
+      <div style="font-weight:700">Paiement confirmé</div>
+      <div class="hint">Votre bot est activé. Utilisez le code d’intégration ci-dessous.</div>
     </div>
 
     <div class="grid">
-      <!-- Colonne gauche : récap -->
+      <!-- Colonne gauche : récap bot -->
       <section class="card">
-        <h2 class="headline">Récapitulatif</h2>
-        <p class="sub">Vérifiez le pack, l’identité visuelle et le message d’accueil. Ajustez si nécessaire.</p>
+        <h2 class="headline">Votre bot</h2>
+        <p class="sub">Vérifiez l’identité avant intégration. Vous pouvez rééditer ces éléments plus tard depuis le dashboard.</p>
 
         <div class="kv" style="margin-bottom:14px">
           <div>
-            <img
-              class="avatar"
-              alt="avatar"
-              src="{{ (cfg.avatar_url or '/avatar/agent_immo') | e }}"
-              onerror="this.src='/avatar/agent_immo'; this.style.opacity='.95'">
+            <img class="avatar" alt="avatar" src="{{ cfg.avatar_url | e }}"
+                 onerror="this.src='/avatar/agent_immo'; this.style.opacity='.95'">
           </div>
           <div class="info-list">
-            <div><span class="k">Pack</span> — <span class="badge">{{ (cfg.pack or 'agent_immobilier') | e }}</span></div>
+            <div><span class="k">Nom</span> — <span>{{ (cfg.display_name or 'Betty Bot') | e }}</span></div>
+            <div><span class="k">Pack</span> — <span class="badge">{{ (cfg.pack or '-') | e }}</span></div>
             <div><span class="k">Couleur</span> — <span class="badge">{{ (cfg.color or '#4F46E5') | e }}</span></div>
-            <div><span class="k">Contact</span> — <span>{{ (cfg.contact or '—') | e }}</span></div>
             <div><span class="k">Greeting</span> — <span>{{ (cfg.greeting or 'Bonjour, je suis Betty. Comment puis-je vous aider ?') | e }}</span></div>
             <div><span class="k">Position</span> — <span>px={{ (cfg.px or '0.5') | e }}, py={{ (cfg.py or '0.5') | e }}</span></div>
+            <div><span class="k">ID public</span> — <span class="mono">{{ (cfg.public_id or '-') | e }}</span></div>
           </div>
         </div>
-
-        <div class="cta">
-          <a class="btn" href="/pay">Procéder au paiement</a>
-          <a class="btn secondary" href="/inscription">Modifier</a>
-          <a class="btn ghost" href="/preview?pack={{ (cfg.pack or 'agent_immobilier')|e }}">Prévisualiser</a>
-        </div>
-
-        <hr class="divider">
 
         <details class="grp">
-          <summary>
-            📦 Contenu du pack sélectionné
-            <span class="chev"></span>
-          </summary>
+          <summary>📦 Contenu du pack <span class="chev"></span></summary>
           <div class="sub-panel two">
             <div>
-              <h3 style="margin:0 0 6px">Fonctionnalités incluses</h3>
+              <h3 style="margin:0 0 6px">Inclus</h3>
               <ul style="margin:0 0 8px 18px">
-                <li>Assistant web intégré (script embed, 1 domaine autorisé)</li>
-                <li>Qualification de leads + envoi email résumé</li>
+                <li>Assistant web embarqué (1 domaine)</li>
+                <li>Qualification de leads + envoi e-mail</li>
                 <li>Dashboard de configuration rapide</li>
-                <li>Personnalisation avatar / teinte / message d’accueil</li>
+                <li>Personnalisation (avatar / teinte / message)</li>
               </ul>
-              <p class="hint">Besoin multi-domaines / CRM / RGPD avancé ? Voir l’offre Pro.</p>
             </div>
             <div>
-              <h3 style="margin:0 0 6px">Spécificités du métier</h3>
+              <h3 style="margin:0 0 6px">Spécificités métier</h3>
               <ul style="margin:0 0 8px 18px">
-                <li>Scripts conversationnels adaptés : <b>{{ (cfg.pack or 'agent_immobilier') | e }}</b></li>
-                <li>Templates d’emails dédiés</li>
-                <li>Captation de données conforme (consentement explicite)</li>
+                <li>Scripts adaptés : <b>{{ (cfg.pack or '-') | e }}</b></li>
+                <li>Modèle de collecte structuré (LEAD_JSON)</li>
+                <li>RGPD de base (opt-in ; export sur demande)</li>
               </ul>
-              <p class="hint">Les contenus sont éditables depuis le tableau de bord.</p>
             </div>
           </div>
         </details>
 
         <details class="grp" style="margin-top:12px">
-          <summary>
-            🧩 Intégration & aperçu
-            <span class="chev"></span>
-          </summary>
+          <summary>🧪 Détails techniques <span class="chev"></span></summary>
           <div class="sub-panel">
-            <p class="hint" style="margin:0 0 10px">Votre widget peut être prévisualisé avant paiement.</p>
-            <div class="two">
-              <div>
-                <h4 style="margin:0 0 6px">Lien d’aperçu (exemple)</h4>
-                <div class="mono" style="font-size:13px;word-break:break-all">
-                  /preview?pack={{ (cfg.pack or 'agent_immobilier')|e }}&color={{ (cfg.color or '#4F46E5')|e }}
-                </div>
-                <p class="hint" style="margin:6px 0 0">* Le lien exact peut différer selon votre déploiement.</p>
-              </div>
-              <div>
-                <h4 style="margin:0 0 6px">Snippet d’intégration (exemple)</h4>
-                <pre class="json mono">&lt;script src="https://cdn.spectramedia.ai/betty/embed.js"
-  data-pack="{{ (cfg.pack or 'agent_immobilier')|e }}"
-  data-color="{{ (cfg.color or '#4F46E5')|e }}"
-  data-greeting="{{ (cfg.greeting or 'Bonjour, je suis Betty.')|e }}"&gt;&lt;/script&gt;</pre>
-              </div>
-            </div>
-          </div>
-        </details>
-
-        <details class="grp" style="margin-top:12px">
-          <summary>
-            🧪 Détails techniques
-            <span class="chev"></span>
-          </summary>
-          <div class="sub-panel">
-            <p class="hint">Ces valeurs sont lues depuis la session ou la querystring en fallback.</p>
-            <pre class="json mono">{{ cfg | tojson(indent=2) }}</pre>
-          </div>
-        </details>
-
-        <details class="grp" style="margin-top:12px">
-          <summary>
-            🛠️ Dépannage rapide (si une ressource manque)
-            <span class="chev"></span>
-          </summary>
-          <div class="sub-panel">
-            <ul style="margin:0 0 8px 18px">
-              <li>Si l’avatar ne s’affiche pas, un <code class="inline">onerror</code> bascule vers <code class="inline">/avatar/agent_immo</code>.</li>
-              <li>Si des images <code class="inline">/static/*.jpg</code> sont absentes, renommez-les exactement comme appelées (Linux est sensible à la casse).</li>
-              <li>Si <code class="inline">/favicon-*.png</code> ou <code class="inline">/site.webmanifest</code> manquent, créez des placeholders (ou exposez des routes dédiées).</li>
-              <li>Ne jamais utiliser <code class="inline">cfg['clé']</code> dans Jinja → préférez <code class="inline">{{'{{ (cfg.cle or \\\"-\\\") }}'}}</code>.</li>
-            </ul>
-            <p class="hint">Les 404 d’assets n’entraînent pas un 500, mais nettoyez-les pour des logs propres.</p>
+            <p class="hint">Valeurs utiles (source : DB + querystring).</p>
+            <pre class="code mono">{{ cfg | tojson(indent=2) }}</pre>
           </div>
         </details>
       </section>
 
-      <!-- Colonne droite : paiement / conformité / notes -->
+      <!-- Colonne droite : intégration -->
       <aside class="card">
-        <h2 class="headline">Prochaine étape</h2>
-        <p class="sub">Validez le paiement pour activer le bot et recevoir le snippet final.</p>
+        <h2 class="headline">Intégration</h2>
+        <p class="sub">Copiez/collez ce bloc dans votre site (Wix/Webflow/Squarespace…).</p>
 
-        <div class="row" style="margin-bottom:10px">
-          <a class="btn" href="/pay">Payer maintenant</a>
-          <a class="btn secondary" href="/inscription">Revenir</a>
-        </div>
+        <h3 style="margin:0 0 6px">Iframe</h3>
+        <pre class="code mono">{{ cfg.iframe_snippet | e }}</pre>
+        <p class="hint" style="margin-top:8px">URL : <span class="mono">{{ cfg.embed_url | e }}</span></p>
 
         <hr class="divider">
 
         <details class="grp">
-          <summary>
-            🔐 Conformité & données
-            <span class="chev"></span>
-          </summary>
+          <summary>❓ Dépannage rapide <span class="chev"></span></summary>
           <div class="sub-panel">
             <ul style="margin:0 0 8px 18px">
-              <li>Consentement explicite pour la collecte (opt-in clair)</li>
-              <li>Suppression sur demande et traçabilité</li>
-              <li>Export des données (CSV/JSON) sur demande</li>
-              <li>Stockage UE par défaut (selon plan)</li>
-            </ul>
-            <p class="hint">Des options avancées RGPD et DPA sont disponibles sur l’offre Pro.</p>
-          </div>
-        </details>
-
-        <details class="grp" style="margin-top:12px">
-          <summary>
-            🧾 Facturation
-            <span class="chev"></span>
-          </summary>
-          <div class="sub-panel">
-            <div class="two">
-              <div>
-                <div class="k">Plan</div>
-                <div class="badge">Standard — 29,99 €/mois</div>
-              </div>
-              <div>
-                <div class="k">Essai</div>
-                <div>Prévisualisation gratuite incluse</div>
-              </div>
-              <div>
-                <div class="k">Renouvellement</div>
-                <div>Mensuel, sans engagement</div>
-              </div>
-              <div>
-                <div class="k">Annulation</div>
-                <div>À tout moment avant l’échéance</div>
-              </div>
-            </div>
-          </div>
-        </details>
-
-        <details class="grp" style="margin-top:12px">
-          <summary>
-            📝 Notes internes
-            <span class="chev"></span>
-          </summary>
-          <div class="sub-panel">
-            <p class="hint">Ces notes ne sont pas visibles par vos visiteurs.</p>
-            <ul style="margin:0 0 8px 18px">
-              <li>Pack : <b>{{ (cfg.pack or 'agent_immobilier') | e }}</b></li>
-              <li>Couleur : <span style="color:var(--brand)">{{ (cfg.color or '#4F46E5') | e }}</span></li>
-              <li>Contact : {{ (cfg.contact or '—') | e }}</li>
-              <li>Greet : {{ (cfg.greeting or 'Bonjour, je suis Betty.') | e }}</li>
-              <li>Avatar URL : <span class="mono">{{ (cfg.avatar_url or '/avatar/agent_immo') | e }}</span></li>
+              <li>Si l’avatar ne s’affiche pas, un <code>onerror</code> bascule vers <code>/avatar/agent_immo</code>.</li>
+              <li>Linux est sensible à la casse : renommez exactement les fichiers sous <code>/static</code>.</li>
+              <li>Les 404 d’assets (<code>/favicon-*.png</code>, <code>/site.webmanifest</code>) n’empêchent pas l’intégration.</li>
             </ul>
           </div>
         </details>
@@ -320,18 +183,13 @@
 
     <footer>
       <div>© Betty Bots — Spectra Media</div>
-      <div class="r">Support : <a class="pill" href="mailto:support@spectramedia.ai">support@spectramedia.ai</a></div>
+      <div class="r">Support : <a style="color:#a5b4fc" href="mailto:support@spectramedia.ai">support@spectramedia.ai</a></div>
     </footer>
   </div>
 
-  <!-- Protection : pas d’erreur JS blocking si des éléments manquent -->
   <script>
-    (function(){
-      try{
-        // Accent léger sur la couleur de marque
-        document.documentElement.style.setProperty('--brand', "{{ (cfg.color or '#4F46E5')|e }}");
-      }catch(e){}
-    })();
+    // Harmonise la teinte
+    try{ document.documentElement.style.setProperty('--brand', "{{ (cfg.color or '#4F46E5')|e }}"); }catch(e){}
   </script>
 </body>
 </html>
