@@ -526,8 +526,8 @@ def recap_page():
 
 @app.route("/chat")
 def chat_page():
-    public_id = (request.args.get("public_id") or "").strip()
-    embed     = request.args.get("embed", "0") == "1"
+    public_id   = (request.args.get("public_id") or "").strip()
+    embed       = request.args.get("embed", "0") == "1"
     buyer_email = request.args.get("buyer_email", "").strip()
 
     bot = db_get_bot(public_id)
@@ -544,17 +544,16 @@ def chat_page():
             "pack": base["pack"]
         }
 
-    display_name = bot.get("name") or "Betty Bot"
+    # --- Nettoyage du nom : on retire toute mention finale entre parenthèses
+    name_raw = (bot.get("name") or "Betty Bot").strip()
+    display_name = re.sub(r"\s*\([^)]*\)\s*$", "", name_raw).strip() or "Betty Bot"
+    full_name = display_name  # pas d'ajout de (Avocat)/(Immobilier) pour éviter les doublons
+
+    # Avatar robuste : si manquant, fallback selon le pack
     pack_code = (bot.get("pack") or "").lower()
-    pack_label_map = {
-        "medecin": "Médecin",
-        "avocat": "Avocat",
-        "immo": "Immobilier",
-        "immobilier": "Immobilier",
-        "notaire": "Notaire",
-    }
-    pack_label = pack_label_map.get(pack_code, "")
-    full_name = f"{display_name} ({pack_label})" if pack_label else display_name
+    slug = _slug_from_pack(pack_code)
+    default_avatar = f"{slug}.jpg" if slug in ("avocat", "immo", "medecin") else "avocat.jpg"
+    avatar_url = static_url(bot.get("avatar_file") or default_avatar)
 
     return render_template(
         "chat.html",
@@ -564,7 +563,7 @@ def chat_page():
         full_name=full_name,
         header_title="Betty Bot, votre assistante AI",
         color=bot.get("color") or "#4F46E5",
-        avatar_url=static_url(bot.get("avatar_file") or "avocat.jpg"),
+        avatar_url=avatar_url,
         greeting=bot.get("greeting") or "Bonjour, je suis Betty. Comment puis-je vous aider ?",
         buyer_email=buyer_email,
         embed=embed
