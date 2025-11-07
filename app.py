@@ -7,7 +7,6 @@ from contextlib import contextmanager
 from urllib.parse import urlparse, parse_qs, urlencode
 from jinja2 import TemplateNotFound
 
-
 app = Flask(__name__)
 app.secret_key = os.getenv("FLASK_SECRET_KEY", "dev-secret-change-me")
 
@@ -130,6 +129,9 @@ def db_get_bot(public_id: str):
 # init DB
 db_init()
 
+# =========================
+# FAVICONS / MANIFEST (évite les 500 dès le boot)
+# =========================
 @app.route("/favicon.ico")
 def favicon_root():
     p = os.path.join(app.root_path, "static", "favicon.ico")
@@ -137,49 +139,62 @@ def favicon_root():
         return send_from_directory(os.path.dirname(p), os.path.basename(p))
     return "", 204
 
+@app.route("/favicon.png")
+def favicon_png():
+    p = os.path.join(app.root_path, "static", "favicon.png")
+    if os.path.exists(p):
+        return send_from_directory(os.path.dirname(p), os.path.basename(p))
+    return "", 204
+
+@app.route("/favicon-16x16.png")
+def fav16():
+    p = os.path.join(app.root_path, "static", "favicon-16x16.png")
+    if os.path.exists(p):
+        return send_from_directory(os.path.dirname(p), os.path.basename(p))
+    return "", 204
+
+@app.route("/favicon-32x32.png")
+def fav32():
+    p = os.path.join(app.root_path, "static", "favicon-32x32.png")
+    if os.path.exists(p):
+        return send_from_directory(os.path.dirname(p), os.path.basename(p))
+    return "", 204
+
+@app.route("/site.webmanifest")
+def site_manifest():
+    p = os.path.join(app.root_path, "static", "site.webmanifest")
+    if os.path.exists(p):
+        return send_from_directory(os.path.dirname(p), os.path.basename(p))
+    return jsonify({"name":"Betty Bots","short_name":"Betty","icons":[]}), 200
+
 # =========================
 # HELPERS
 # =========================
 def static_url(filename: str) -> str:
-    return url_for("static", filename=filename)  # URL relative
+    return url_for("static", filename=filename)
+
 def parse_contact_info(raw: str) -> dict:
-    """
-    Parse libre et tolérant des infos collées dans le champ 'contact_info'
-    (nom, email, téléphone, adresse, horaires). Retourne aussi 'raw'.
-    """
     raw = (raw or "").strip()
     if not raw:
         return {"raw": "", "name": "", "email": "", "phone": "", "address": "", "hours": ""}
 
-    # Email
     m_email = re.search(r'[\w\.-]+@[\w\.-]+\.\w+', raw)
     email = m_email.group(0) if m_email else ""
 
-    # Téléphone (formats tolérants)
     m_phone = re.search(r'(\+?\d[\d \.\-]{6,})', raw)
     phone = m_phone.group(1).strip() if m_phone else ""
 
-    # Heures (très heuristique)
     m_hours = re.search(r'(horaire|heures?|ouvertures?)\s*[:\-]?\s*(.+)', raw, re.I)
     hours = m_hours.group(2).strip() if m_hours else ""
 
-    # Nom (si présent comme "Nom: ...")
     m_name = re.search(r'(?:nom|entreprise|cabinet)\s*[:\-]?\s*(.+)', raw, re.I)
     name = m_name.group(1).strip() if m_name else ""
 
-    # Adresse (heuristique)
     m_addr = re.search(r'(?:adresse|address)\s*[:\-]?\s*(.+)', raw, re.I)
     address = m_addr.group(1).strip() if m_addr else ""
 
-    return {
-        "raw": raw,
-        "name": name,
-        "email": email,
-        "phone": phone,
-        "address": address,
-        "hours": hours,
-    }
-    
+    return {"raw": raw, "name": name, "email": email, "phone": phone, "address": address, "hours": hours}
+
 def load_pack_prompt(pack_name: str) -> str:
     path = f"data/packs/{pack_name}.yaml"
     if not os.path.exists(path):
@@ -206,10 +221,6 @@ def build_business_block(profile: dict) -> str:
     return "\n".join(lines)
 
 def build_system_prompt(pack_name: str, profile: dict, greeting: str = "") -> str:
-    """Prompt commun à TOUS les packs : qualification ultra-courte puis collecte Tél → Nom complet → Email.
-       L'envoi de lead est déclenché côté serveur UNIQUEMENT quand téléphone + nom complet + email sont présents.
-    """
-    # Texte de base (fallback si pas de YAML pack)
     path = f"data/packs/{pack_name}.yaml"
     base = (
         "Tu es l’assistante AI du professionnel. Ta mission prioritaire est de QUALIFIER TRÈS VITE "
@@ -245,7 +256,6 @@ RAPPEL :
 """
     greet = f"\nMessage d'accueil recommandé : {greeting}\n" if greeting else ""
     return f"{base}\n{biz}\n{guide}\n{greet}"
-
 
 # ======= LLM avec retry exponentiel =======
 def call_llm_with_history(system_prompt: str, history: list, user_input: str) -> str:
@@ -283,12 +293,9 @@ def call_llm_with_history(system_prompt: str, history: list, user_input: str) ->
     return ""
 
 # ======= Parsing & fallback =======
-# ======= Parsing & fallback (communs à tous les packs) =======
-# Tolère espaces et backticks éventuels autour de la balise, et capture proprement le JSON
 LEAD_TAG_RE = re.compile(r"`?\s*<LEAD_JSON>\s*(\{.*?\})\s*</LEAD_JSON>\s*`?\s*$", re.DOTALL)
 
 def extract_lead_json(text: str):
-    """Retourne (message_sans_tag, lead_dict_ou_None). Ne casse jamais l'affichage côté client."""
     if not text:
         return text, None
     m = LEAD_TAG_RE.search(text)
@@ -303,42 +310,33 @@ def extract_lead_json(text: str):
     return message, lead
 
 def _lead_from_history(history: list) -> dict:
-    """Analyse simple et robuste de l'historique utilisateur pour reconstruire un lead si le modèle oublie le JSON."""
     user_text = " ".join([m["content"] for m in history if m.get("role") == "user"]) or ""
     d = {"reason": "", "email": "", "phone": "", "name": "", "availability": "", "stage": "collecting"}
 
     if not user_text:
         return d
 
-    # Email
     m = re.search(r'[\w\.-]+@[\w\.-]+\.\w+', user_text)
     if m: d["email"] = m.group(0)
 
-    # Téléphone (tolérant aux espaces/points/tirets)
     m = re.search(r'(\+?\d[\d \.\-]{6,})', user_text)
     if m: d["phone"] = m.group(1).strip()
 
-    # Nom complet
     m = re.search(r'(?:je m(?:’|\'|e)appelle|nom\s*:?)\s*([A-Za-zÀ-ÖØ-öø-ÿ\'\-\s]{2,80})', user_text, re.I)
     if m: d["name"] = m.group(1).strip()
 
-    # Motif (raison) – on prend une courte portion si elle est repérable
     m = re.search(r'(?:souhaite|veux|voudrais|besoin|motif|pour)\s*:?(.{5,140})', user_text, re.I)
     if m: d["reason"] = m.group(1).strip()
 
-    # Disponibilités (faible priorité dans ton flux)
     m = re.search(r'(demain|matin|après-midi|soir|lundi|mardi|mercredi|jeudi|vendredi)[^\.!?]{0,60}', user_text, re.I)
     if m: d["availability"] = m.group(0).strip()
 
-    # Règle unique : ready si TÉLÉPHONE + NOM COMPLET + EMAIL
     if d["phone"] and d["name"] and d["email"]:
         d["stage"] = "ready"
     return d
 
 def rule_based_next_question(pack: str, history: list) -> str:
-    """Secours 100% pack-agnostique : impose l'ordre Tél → Nom complet → Email."""
     lead = _lead_from_history(history)
-
     if not lead["phone"]:
         msg = "Quel est votre numéro de téléphone ?"
     elif not lead["name"]:
@@ -348,8 +346,6 @@ def rule_based_next_question(pack: str, history: list) -> str:
     else:
         msg = "Parfait, je transmets vos coordonnées. Vous serez rappelé rapidement."
         lead["stage"] = "ready"
-
-    # Balise unique (une ligne)
     return f"{msg}\n<LEAD_JSON>{json.dumps(lead, ensure_ascii=False)}</LEAD_JSON>"
 
 # ======= Envoi e-mail lead =======
@@ -392,7 +388,6 @@ BOTS = {
     "avocat-001":  {"pack":"avocat","name":"Betty Bot (Avocat)","color":"#4F46E5","avatar_file":"avocat.jpg","profile":{},"greeting":"","buyer_email":None,"owner_name":None,"public_id":None},
     "immo-002":    {"pack":"immo","name":"Betty Bot (Immobilier)","color":"#16A34A","avatar_file":"immo.jpg","profile":{},"greeting":"","buyer_email":None,"owner_name":None,"public_id":None},
     "medecin-003": {"pack":"medecin","name":"Betty Bot (Médecin)","color":"#0284C7","avatar_file":"medecin.jpg","profile":{},"greeting":"","buyer_email":None,"owner_name":None,"public_id":None},
-        # --- Démo page d'accueil (avatar avocat conservé)
     "spectra-demo": {
         "pack": "avocat",
         "name": "Betty Bot (Spectra Media)",
@@ -404,7 +399,6 @@ BOTS = {
         "owner_name": "Spectra Media",
         "public_id": "spectra-demo"
     },
-
 }
 
 def _gen_public_id(email: str, bot_key: str) -> str:
@@ -432,7 +426,7 @@ def find_bot_by_public_id(public_id: str):
     return bot_key, b2
 
 # Mémoire de conversations
-CONVS = {}  # key: conv_id -> list[{"role": "...", "content": "..."}]
+CONVS = {}
 
 # =========================
 # ROUTES PAGES
@@ -442,7 +436,6 @@ def index():
     try:
         return render_template("index.html", title="Découvrez Betty")
     except TemplateNotFound:
-        # Fallback ultra-léger pour éviter tout crash si le template n’est pas présent dans le déploiement
         return """
         <!doctype html><meta charset="utf-8">
         <style>
@@ -457,15 +450,10 @@ def index():
           <h1>Betty Bots — déploiement minimal</h1>
           <p class="muted">Le template <code>templates/index.html</code> n’a pas été trouvé dans ce déploiement.<br>
           Le fallback s’affiche pour empêcher le crash.</p>
-          <p>Vérifie que le fichier est bien <b>commit</b> et <b>poussé</b> : <code>templates/index.html</code>.</p>
+          <p>Vérifie que le fichier est bien <b>commit</b> et <b>push</b> : <code>templates/index.html</code>.</p>
           <p>Interface de config : <a href="/config">/config</a></p>
         </div>
         """, 200
-
-
-# =========================
-# PAGE DE CONFIGURATION DU BOT
-# =========================
 
 @app.route("/config", methods=["GET", "POST"])
 def config_page():
@@ -481,7 +469,6 @@ def config_page():
                                 pack=pack, color=color, avatar=avatar,
                                 greeting=greeting, contact=contact,
                                 px=persona_x, py=persona_y))
-    # GET
     try:
         return render_template("config.html", title="Configurer votre bot")
     except TemplateNotFound:
@@ -503,7 +490,6 @@ def config_page():
           <button type="submit">Continuer</button>
         </form>
         """, 200
-
 
 @app.route("/inscription", methods=["GET", "POST"])
 def inscription_page():
@@ -562,11 +548,9 @@ def _slug_from_pack(pack: str) -> str:
 
 @app.route("/recap")
 def recap_page():
-    # lecture paramètres
     pack = (request.args.get("pack") or "").strip().lower() or "avocat"
     public_id = (request.args.get("public_id") or "").strip()
 
-    # récup bot (DB ou fallback démo)
     bot = db_get_bot(public_id) if public_id else None
     if not bot:
         key = "avocat-001" if pack == "avocat" else ("medecin-003" if pack == "medecin" else "immo-002")
@@ -582,34 +566,23 @@ def recap_page():
             "greeting": ""
         }
 
-    # titres
     display_name = bot.get("name") or "Betty Bot"
     owner        = bot.get("owner_name") or ""
     full_name    = f"{display_name} — {owner}" if owner else display_name
 
-    # avatar
     slug = _slug_from_pack(bot.get("pack") or pack)
     avatar_file = bot.get("avatar_file") or f"logo-{slug}.jpg"
 
-    # URL d'embed et snippet prêt à coller (Wix/Webflow/Squarespace)
-    # Création du lien d’intégration avec l’email de l’acheteur
-params = {"public_id": bot.get("public_id"), "embed": "1"}
-buyer = (bot.get("buyer_email") or "").strip()
-if buyer:
-    params["buyer_email"] = buyer
+    # --- Construction propre de l'URL d'embed (inclut buyer_email si dispo)
+    params = {"public_id": bot.get("public_id"), "embed": "1"}
+    buyer = (bot.get("buyer_email") or "").strip()
+    if buyer:
+        params["buyer_email"] = buyer
+    embed_url = f"{BASE_URL}/chat?{urlencode(params)}"
 
-embed_url = f"{BASE_URL}/chat?{urlencode(params)}"
-
-iframe_snippet = (
-    '<div style="position:relative;width:100%;max-width:420px;height:620px;margin:0 auto;">\n'
-    f'  <iframe src="{embed_url}" title="{full_name}" '
-    'style="width:100%;height:100%;border:0;border-radius:16px;'
-    'box-shadow:0 10px 30px rgba(0,0,0,.25);background:#0b0f1e;" '
-    'loading="lazy" referrerpolicy="no-referrer-when-downgrade" '
-    'allow="clipboard-read; clipboard-write; microphone; autoplay"></iframe>\n'
-    '</div>'
-)
-
+    iframe_snippet = (
+        '<div style="position:relative;width:100%;max-width:420px;height:620px;margin:0 auto;">\n'
+        f'  <iframe src="{embed_url}" title="{full_name}" '
         'style="width:100%;height:100%;border:0;border-radius:16px;'
         'box-shadow:0 10px 30px rgba(0,0,0,.25);background:#0b0f1e;" '
         'loading="lazy" referrerpolicy="no-referrer-when-downgrade" '
@@ -617,7 +590,6 @@ iframe_snippet = (
         '</div>'
     )
 
-    # cfg unique pour le template recap.html (post-paiement : pas de boutons)
     cfg = {
         "pack":        bot.get("pack") or pack,
         "color":       bot.get("color") or "#4F46E5",
@@ -638,8 +610,8 @@ iframe_snippet = (
     return render_template(
         "recap.html",
         title="Récapitulatif",
-        cfg=cfg,              # <<< unique source de vérité
-        info=cfg,             # <<< miroir (si ton template lit encore 'info')
+        cfg=cfg,
+        info=cfg,
         base_url=BASE_URL,
         full_name=full_name
     )
@@ -724,12 +696,10 @@ def bettybot_reply():
         f"[DBG] buyer_email(payload='{payload.get('buyer_email')}'; ref='{q.get('buyer_email',[None])[0]}') pid='{public_id}'"
     )
 
-     # --- Persona : démo (index) vs bots achetés ---
-        # --- Persona : démo (index) vs bots achetés ---
+    # --- Persona : démo (index) vs bots achetés ---
     demo_mode = (public_id == "spectra-demo")
 
     if demo_mode:
-        # Bot de présentation uniquement (Spectra Media), avatar avocat conservé
         system_prompt = """
 Tu es **Betty Bot (Spectra Media)**, l’assistante de présentation des **Betty Bots** sur la page d’accueil.
 Objectif unique : expliquer comment **créer, configurer et intégrer** un bot métier (avocat, médecin, immobilier, etc.).
@@ -753,13 +723,11 @@ Rôle et contenu attendus :
             bot.get("greeting", "")
         )
 
-
     full_text = call_llm_with_history(system_prompt=system_prompt, history=history, user_input=user_input)
     if not full_text:
         full_text = rule_based_next_question(bot.get("pack",""), history + [{"role":"user","content": user_input}])
 
     response_text, lead = extract_lead_json(full_text)
-    # sécurité: si un tag traîne encore, on le supprime côté serveur
     response_text = re.sub(r"<LEAD_JSON>.*?</LEAD_JSON>\s*$", "", response_text or "", flags=re.DOTALL).rstrip()
 
     # maj historique
@@ -770,10 +738,9 @@ Rôle et contenu attendus :
     else:
         session[f"conv_{public_id or bot_key}"] = history
 
-        # Envoi e-mail si lead "ready" (règle UNIQUE : téléphone + nom complet + email)
+    # Envoi e-mail si lead "ready"
     debug_to = None
     if True:
-        # Si la balise n'est pas revenue, on reconstruit depuis l'historique + dernier input
         if not lead or not isinstance(lead, dict):
             lead = _lead_from_history(history + [{"role": "user", "content": user_input}])
 
@@ -836,7 +803,6 @@ def embed_meta():
 @app.route("/api/bot_meta")
 def bot_meta():
     bot_id = (request.args.get("bot_id") or request.args.get("public_id") or "").strip()
-    # --- CAS SPÉCIAL : démo de la home ---
     if bot_id == "spectra-demo":
         b = BOTS["spectra-demo"]
         return jsonify({
@@ -846,7 +812,6 @@ def bot_meta():
             "greeting": b.get("greeting") or "Bonjour et bienvenue chez Spectra Media. Souhaitez-vous créer votre Betty Bot métier ?"
         })
 
-    # DEMO (index) : ids en seed
     if bot_id in BOTS:
         b = BOTS[bot_id]
         demo_greetings = {
@@ -861,7 +826,6 @@ def bot_meta():
             "greeting": demo_greetings.get(bot_id, "Bonjour, je suis Betty. Comment puis-je vous aider ?")
         })
 
-    # BOTS ACHETÉS (public_id hashé)
     _, bot = find_bot_by_public_id(bot_id)
     if not bot:
         return jsonify({"error": "bot_not_found"}), 404
@@ -872,7 +836,6 @@ def bot_meta():
         "avatar_url": static_url(bot.get("avatar_file") or "avocat.jpg"),
         "greeting": bot.get("greeting") or "Bonjour, je suis Betty. Comment puis-je vous aider ?"
     })
-
 
 @app.route("/healthz")
 def healthz():
@@ -906,39 +869,15 @@ def test_mailjet():
 # =========================
 @app.route("/avatar/<slug>")
 def avatar(slug: str):
-    """Serve /static/logo-<slug>.jpg si présent, sinon un 1px transparent."""
     static_dir = os.path.join(app.root_path, "static")
     filename = f"logo-{slug}.jpg"
     path = os.path.join(static_dir, filename)
     if os.path.exists(path):
         return send_from_directory(static_dir, filename)
-    # 1x1 transparent PNG
     transparent_png = base64.b64decode(
         "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+Xad8AAAAASUVORK5CYII="
     )
     return Response(transparent_png, mimetype="image/png")
-
-@app.route("/favicon-16x16.png")
-def fav16():
-    p = os.path.join(app.root_path, "static", "favicon-16x16.png")
-    if os.path.exists(p):
-        return send_from_directory(os.path.dirname(p), os.path.basename(p))
-    return "", 204
-
-@app.route("/favicon-32x32.png")
-def fav32():
-    p = os.path.join(app.root_path, "static", "favicon-32x32.png")
-    if os.path.exists(p):
-        return send_from_directory(os.path.dirname(p), os.path.basename(p))
-    return "", 204
-
-@app.route("/site.webmanifest")
-def site_manifest():
-    p = os.path.join(app.root_path, "static", "site.webmanifest")
-    if os.path.exists(p):
-        return send_from_directory(os.path.dirname(p), os.path.basename(p))
-    # mini manifest par défaut
-    return jsonify({"name":"Betty Bots","short_name":"Betty","icons":[]}), 200
 
 # =========================
 # MAIN
