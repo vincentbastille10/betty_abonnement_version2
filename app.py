@@ -697,14 +697,42 @@ def bot_meta():
     bot_id = (request.args.get("bot_id") or request.args.get("public_id") or "").strip()
 
     if bot_id in BOTS:
-        b = BOTS[bot_id]
-        return jsonify({
-            "name": b.get("name") or "Betty Bot",
-            "color_hex": b.get("color") or "#4F46E5",
-            "avatar_url": static_url(b.get("avatar_file") or "avocat.jpg"),
-            "greeting": b.get("greeting") or "Bonjour, je suis Betty. Comment puis-je vous aider ?"
-        })
+    b = BOTS[bot_id]
+    demo_greetings = {
+        "avocat-001":  "Bonjour et bienvenue au cabinet Werner & Werner. Que puis-je faire pour vous ?",
+        "immo-002":    "Bonjour et bienvenue à l’agence Werner Immobilier. Comment puis-je vous aider ?",
+        "medecin-003": "Bonjour et bienvenue au cabinet Werner Santé. Que puis-je faire pour vous ?",
+    }
+    return jsonify({
+        "name": b.get("name") or "Betty Bot",
+        "color_hex": b.get("color") or "#4F46E5",
+        "avatar_url": static_url(b.get("avatar_file") or "avocat.jpg"),
+        "greeting": demo_greetings.get(bot_id, "Bonjour, je suis Betty. Comment puis-je vous aider ?")
+    })
+demo_mode = public_id in ("avocat-001", "immo-002", "medecin-003")
+if demo_mode:
+    pack_label = {"avocat-001":"avocat", "immo-002":"immobilier", "medecin-003":"médecin"}[public_id]
+    system_prompt = f"""
+Tu es **Betty**, conseillère commerciale pour la flotte **Betty Bots** (démo sur page d’accueil).
+Rôle:
+- Accueillir chaleureusement le visiteur (ex.: "Bienvenue au cabinet Werner & Werner") si pack "{pack_label}".
+- Expliquer que **Betty Bots** est un chatbot **métier** qui **qualifie les leads** (motif, nom, email/téléphone, disponibilités) pour gagner du temps.
+- Préciser que **chaque lead qualifié est automatiquement envoyé à l’adresse e-mail utilisée lors de l’inscription**.
+- Expliquer comment créer un bot: configurer (couleur, avatar, message, coordonnées) → payer (Stripe) → récupérer le script d’intégration (Wix/WordPress/Webflow) → coller sur le site.
+- Si l’utilisateur dit "je veux acheter / créer un bot", détailler les **étapes concrètes** (1-2-3) et proposer d’ouvrir la page de configuration.
+- Style: clair, concis, **2 phrases max par message**, une seule question à la fois, français, ton bienveillant.
+- Ne donne **aucun avis juridique/médical** ici (on est en mode présentation produit).
 
+À la fin de chacun de tes messages, ajoute **sur une seule ligne** (sans le formater comme du code) :
+<LEAD_JSON>{{"reason": "", "name": "", "email": "", "phone": "", "availability": "", "stage": "collecting"}}</LEAD_JSON>
+"""
+else:
+    system_prompt = build_system_prompt(
+        bot.get("pack", "avocat"),
+        bot.get("profile", {}),
+        bot.get("greeting", "")
+    )
+build_system_prompt
     _, bot = find_bot_by_public_id(bot_id)
     if not bot:
         return jsonify({"error": "bot_not_found"}), 404
