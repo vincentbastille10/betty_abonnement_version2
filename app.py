@@ -398,6 +398,10 @@ CONVS = {}  # key: conv_id -> list[{"role": "...", "content": "..."}]
 def index():
     return render_template("index.html", title="Découvrez Betty")
 
+# =========================
+# PAGE DE CONFIGURATION DU BOT
+# =========================
+
 @app.route("/config", methods=["GET", "POST"])
 def config_page():
     if request.method == "POST":
@@ -412,7 +416,29 @@ def config_page():
                                 pack=pack, color=color, avatar=avatar,
                                 greeting=greeting, contact=contact,
                                 px=persona_x, py=persona_y))
-    return render_template("config.html", title="Configurer votre bot")
+    # GET
+    try:
+        return render_template("config.html", title="Configurer votre bot")
+    except TemplateNotFound:
+        return """
+        <!doctype html><meta charset="utf-8">
+        <h1>Configurer votre bot</h1>
+        <form method="post">
+          <label>Pack <select name="pack">
+            <option value="avocat">Avocat</option>
+            <option value="medecin">Médecin</option>
+            <option value="immo">Immobilier</option>
+          </select></label><br><br>
+          <label>Couleur <input name="color" value="#4F46E5"></label><br><br>
+          <label>Avatar <input name="avatar" value="avocat.jpg"></label><br><br>
+          <label>Message d'accueil <input name="greeting" value=""></label><br><br>
+          <label>Infos contact (nom, email, tel, horaires...)<br>
+            <textarea name="contact_info" rows="4" cols="50"></textarea>
+          </label><br><br>
+          <button type="submit">Continuer</button>
+        </form>
+        """, 200
+
 
 @app.route("/inscription", methods=["GET", "POST"])
 def inscription_page():
