@@ -130,6 +130,13 @@ def db_get_bot(public_id: str):
 # init DB
 db_init()
 
+@app.route("/favicon.ico")
+def favicon_root():
+    p = os.path.join(app.root_path, "static", "favicon.ico")
+    if os.path.exists(p):
+        return send_from_directory(os.path.dirname(p), os.path.basename(p))
+    return "", 204
+
 # =========================
 # HELPERS
 # =========================
