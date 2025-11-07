@@ -457,10 +457,10 @@ def _slug_from_pack(pack: str) -> str:
 @app.route("/recap")
 def recap_page():
     # lecture paramètres
-    pack = request.args.get("pack", "avocat")
+    pack = (request.args.get("pack") or "").strip().lower() or "avocat"
     public_id = (request.args.get("public_id") or "").strip()
 
-    # récup bot
+    # récup bot (DB ou fallback démo)
     bot = db_get_bot(public_id) if public_id else None
     if not bot:
         key = "avocat-001" if pack == "avocat" else ("medecin-003" if pack == "medecin" else "immo-002")
@@ -476,31 +476,50 @@ def recap_page():
             "greeting": ""
         }
 
-    # construire cfg attendu par recap.html
+    # titres
+    display_name = bot.get("name") or "Betty Bot"
+    owner        = bot.get("owner_name") or ""
+    full_name    = f"{display_name} — {owner}" if owner else display_name
+
+    # avatar
     slug = _slug_from_pack(bot.get("pack") or pack)
     avatar_file = bot.get("avatar_file") or f"logo-{slug}.jpg"
-    cfg = {
-        "pack": bot.get("pack") or pack,
-        "color": bot.get("color") or "#4F46E5",
-        "greeting": bot.get("greeting") or "Bonjour, je suis Betty. Comment puis-je vous aider ?",
-        "contact": "",
-        "px": request.args.get("px") if request.args.get("px") is not None else "0.5",
-        "py": request.args.get("py") if request.args.get("py") is not None else "0.5",
-        "avatar_url": static_url(avatar_file),
-        "public_id": bot.get("public_id") or "",
-        "buyer_email": bot.get("buyer_email") or ""
-    }
 
-    # variables pour titres éventuels
-    display   = bot.get("name") or "Betty Bot"
-    owner     = bot.get("owner_name") or ""
-    full_name = f"{display} — {owner}" if owner else display
+    # URL d'embed et snippet prêt à coller (Wix/Webflow/Squarespace)
+    embed_url = f"{BASE_URL}/chat?public_id={bot.get('public_id')}&embed=1"
+    iframe_snippet = (
+        '<div style="position:relative;width:100%;max-width:420px;height:620px;margin:0 auto;">\n'
+        f'  <iframe src="{embed_url}" title="{full_name}" '
+        'style="width:100%;height:100%;border:0;border-radius:16px;'
+        'box-shadow:0 10px 30px rgba(0,0,0,.25);background:#0b0f1e;" '
+        'loading="lazy" referrerpolicy="no-referrer-when-downgrade" '
+        'allow="clipboard-read; clipboard-write; microphone; autoplay"></iframe>\n'
+        '</div>'
+    )
+
+    # cfg unique pour le template recap.html (post-paiement : pas de boutons)
+    cfg = {
+        "pack":        bot.get("pack") or pack,
+        "color":       bot.get("color") or "#4F46E5",
+        "greeting":    bot.get("greeting") or "Bonjour, je suis Betty. Comment puis-je vous aider ?",
+        "contact":     (bot.get("profile") or {}).get("raw") or "",
+        "px":          request.args.get("px") if request.args.get("px") is not None else "0.5",
+        "py":          request.args.get("py") if request.args.get("py") is not None else "0.5",
+        "avatar_url":  static_url(avatar_file),
+        "public_id":   bot.get("public_id") or "",
+        "buyer_email": bot.get("buyer_email") or "",
+        "display_name": display_name,
+        "owner_name":   owner,
+        "full_name":    full_name,
+        "embed_url":    embed_url,
+        "iframe_snippet": iframe_snippet,
+    }
 
     return render_template(
         "recap.html",
         title="Récapitulatif",
-        cfg=cfg,              # <<< clé attendue par le template
-        info=cfg,             # <<< miroir (si le template utilise 'info')
+        cfg=cfg,              # <<< unique source de vérité
+        info=cfg,             # <<< miroir (si ton template lit encore 'info')
         base_url=BASE_URL,
         full_name=full_name
     )
