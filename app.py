@@ -5,6 +5,8 @@ import os, yaml, requests, re, stripe, json, uuid, hashlib, sqlite3, time, base6
 from pathlib import Path
 from contextlib import contextmanager
 from urllib.parse import urlparse, parse_qs
+from jinja2 import TemplateNotFound
+
 
 app = Flask(__name__)
 app.secret_key = os.getenv("FLASK_SECRET_KEY", "dev-secret-change-me")
@@ -132,8 +134,8 @@ db_init()
 # HELPERS
 # =========================
 def static_url(filename: str) -> str:
-    return url_for("static", filename=filename, _external=True)
-
+    return url_for("static", filename=filename)  # URL relative
+    
 def load_pack_prompt(pack_name: str) -> str:
     path = f"data/packs/{pack_name}.yaml"
     if not os.path.exists(path):
