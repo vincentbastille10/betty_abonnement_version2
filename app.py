@@ -135,6 +135,43 @@ db_init()
 # =========================
 def static_url(filename: str) -> str:
     return url_for("static", filename=filename)  # URL relative
+def parse_contact_info(raw: str) -> dict:
+    """
+    Parse libre et tolérant des infos collées dans le champ 'contact_info'
+    (nom, email, téléphone, adresse, horaires). Retourne aussi 'raw'.
+    """
+    raw = (raw or "").strip()
+    if not raw:
+        return {"raw": "", "name": "", "email": "", "phone": "", "address": "", "hours": ""}
+
+    # Email
+    m_email = re.search(r'[\w\.-]+@[\w\.-]+\.\w+', raw)
+    email = m_email.group(0) if m_email else ""
+
+    # Téléphone (formats tolérants)
+    m_phone = re.search(r'(\+?\d[\d \.\-]{6,})', raw)
+    phone = m_phone.group(1).strip() if m_phone else ""
+
+    # Heures (très heuristique)
+    m_hours = re.search(r'(horaire|heures?|ouvertures?)\s*[:\-]?\s*(.+)', raw, re.I)
+    hours = m_hours.group(2).strip() if m_hours else ""
+
+    # Nom (si présent comme "Nom: ...")
+    m_name = re.search(r'(?:nom|entreprise|cabinet)\s*[:\-]?\s*(.+)', raw, re.I)
+    name = m_name.group(1).strip() if m_name else ""
+
+    # Adresse (heuristique)
+    m_addr = re.search(r'(?:adresse|address)\s*[:\-]?\s*(.+)', raw, re.I)
+    address = m_addr.group(1).strip() if m_addr else ""
+
+    return {
+        "raw": raw,
+        "name": name,
+        "email": email,
+        "phone": phone,
+        "address": address,
+        "hours": hours,
+    }
     
 def load_pack_prompt(pack_name: str) -> str:
     path = f"data/packs/{pack_name}.yaml"
