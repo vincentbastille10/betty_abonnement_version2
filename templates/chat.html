@@ -64,13 +64,19 @@
   </form>
 
   <script>
-    const form = document.getElementById("chat-form");
-    const box = document.getElementById("chat-box");
+    const form  = document.getElementById("chat-form");
+    const box   = document.getElementById("chat-box");
     const input = document.getElementById("message");
 
-    const BOT_ID = "{{ public_id }}";
+    // Fallback: si public_id est vide dans le template, on le lit dans l'URL (embed client)
+    const qs = new URLSearchParams(location.search);
+    const BOT_ID_TPL = "{{ public_id }}";
+    const BOT_ID = BOT_ID_TPL && BOT_ID_TPL !== "None" ? BOT_ID_TPL : (qs.get("public_id") || qs.get("bot_id") || "");
     const BUYER_EMAIL = "{{ buyer_email }}";
-    let convId = "conv_" + BOT_ID;
+
+    // Conv id stable par session
+    let convId = sessionStorage.getItem("conv_" + BOT_ID) || ("conv_" + BOT_ID);
+    sessionStorage.setItem("conv_" + BOT_ID, convId);
 
     function appendMsg(cls, txt) {
       const d = document.createElement("div");
@@ -84,24 +90,34 @@
       e.preventDefault();
       const msg = input.value.trim();
       if (!msg) return;
+
       appendMsg("user", msg);
       input.value = "";
+
       try {
         const res = await fetch("/api/bettybot", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             message: msg,
-            public_id: BOT_ID,
+            public_id: BOT_ID,        // <= pour compat avec ancienne clé
+            bot_id: BOT_ID,           // <= pour compat avec nouvelle clé
             conv_id: convId,
             buyer_email: BUYER_EMAIL
           })
         });
         const data = await res.json();
-        if (data.response) {
-          // retire le tag <LEAD_JSON>...</LEAD_JSON> éventuel à la fin de la réponse
-          const cleaned = String(data.response).replace(/<LEAD_JSON>[\s\S]*<\/LEAD_JSON>\s*$/,'').trim();
+
+        if (data && typeof data.response !== "undefined") {
+          // Nettoyage robuste du tag technique et des blocs ```
+          const cleaned = String(data.response ?? "")
+            .replace(/\s*<LEAD_JSON>[\s\S]*?(?:<\/LEAD_JSON>|$)/g, "") // supprime le LEAD_JSON même sans balise fermante
+            .replace(/```[\s\S]*?```/g, "")                            // supprime blocs markdown éventuels
+            .trim();
+
           appendMsg("bot", cleaned || ""); 
+        } else {
+          appendMsg("bot", "Désolé, une erreur est survenue.");
         }
 
       } catch (err) {
