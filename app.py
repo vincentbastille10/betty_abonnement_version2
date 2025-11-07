@@ -162,43 +162,46 @@ def build_business_block(profile: dict) -> str:
     return "\n".join(lines)
 
 def build_system_prompt(pack_name: str, profile: dict, greeting: str = "") -> str:
-    base = load_pack_prompt(pack_name)
+    """Prompt commun à TOUS les packs : qualification ultra-courte puis collecte Tél → Nom complet → Email.
+       L'envoi de lead est déclenché côté serveur UNIQUEMENT quand téléphone + nom complet + email sont présents.
+    """
+    # Texte de base (fallback si pas de YAML pack)
+    path = f"data/packs/{pack_name}.yaml"
+    base = (
+        "Tu es l’assistante AI du professionnel. Ta mission prioritaire est de QUALIFIER TRÈS VITE "
+        "(2 échanges maximum avant de demander les coordonnées), puis de proposer un rappel."
+    )
+    if os.path.exists(path):
+        try:
+            with open(path, "r") as f:
+                data = yaml.safe_load(f) or {}
+            base = data.get("prompt", base)
+        except Exception:
+            pass
+
     biz  = build_business_block(profile)
 
-    if (pack_name or "").lower() == "medecin":
-        qualif_order = "**motif**, **email (OBLIGATOIRE)**, **téléphone**, **nom complet**, **disponibilités**"
-        ready_rule   = '— `stage = "ready"` uniquement si **motif + nom + email**.'
-    else:
-        qualif_order = "**motif**, **téléphone** OU **email**, **nom complet**, **disponibilités**"
-        ready_rule   = '— `stage = "ready"` uniquement si **motif + nom + (email ou téléphone)**.'
+    guide = """
+RÈGLES OBLIGATOIRES (communes à TOUS les métiers) :
+- Style : clair, 1 à 2 phrases max par message. Une seule question à la fois.
+- Après 1–2 phrases de mise en contexte maximum, collecte IMMÉDIATEMENT :
+  1) « Quel est votre numéro de téléphone ? »
+  2) « Quel est votre nom et prénom complets ? »
+  3) « Quelle est votre adresse e-mail ? »
+- Dès que téléphone + nom complet + e-mail sont collectés, écris : 
+  « Parfait, je transmets vos coordonnées. Vous serez rappelé rapidement. »
+- N’affiche jamais de variables (pas de {{...}}) ni de JSON à l’écran.
 
-    guide = f"""
-Tu es **Betty**, assistante {pack_name}. Objectif prioritaire : **QUALIFIER** le prospect puis **proposer un rendez-vous**.
+BALISE TECHNIQUE (dernière ligne, une seule ligne, sans markdown) :
+<LEAD_JSON>{"reason":"", "name":"", "email":"", "phone":"", "availability":"", "stage":"collecting|ready"}</LEAD_JSON>
 
-RÈGLES DE CONVERSATION (OBLIGATOIRES) :
-- Pose **UNE seule question** à la fois. 2 phrases max par message.
-- Oriente la qualification dès les 1ers échanges.
-- Champs à collecter (ordre conseillé) : {qualif_order}
-- Dès que les conditions sont réunies, annonce : "Parfait, je transmets au cabinet pour vous proposer un créneau." et passe le stage à "ready".
-- Tu ne donnes pas d'avis juridique/médical ; tu orientes vers le pro.
-- **Ne te réinitialise jamais** en cours d’échange.
-
-RÈGLES SUPPLÉMENTAIRES (QUALIF LEAD) :
-- Ne JAMAIS afficher de variables ou placeholders (ex. {{Téléphone}}, {{Email}}). Pose des questions concrètes :
-  1) "Quel est votre numéro de téléphone ?" (ou "Quelle est votre adresse e-mail ?"),
-  2) "Quel est votre nom complet ?",
-  3) Demander des disponibilités si utile.
-- N'affiche pas le JSON ci-dessous. Réponds normalement, puis ajoute juste la balise technique en dernière ligne.
-
-### SORTIE LEAD JSON
-À CHAQUE message, ajoute en **dernière ligne** (sans texte avant/après, sans markdown) un tag :
-<LEAD_JSON>{{"reason": "<motif ou ''>", "name": "<nom ou ''>", "email": "<email ou ''>", "phone": "<téléphone ou ''>", "availability": "<dispo ou ''>", "stage": "<collecting|ready>"}}</LEAD_JSON>
-
-{ready_rule}
-- Le JSON doit être **une seule ligne** valide. Pas de retour à la ligne, pas de ``` ni autre balise.
+RAPPEL :
+- Le JSON doit tenir sur UNE ligne. 
+- Passe "stage" à "ready" UNIQUEMENT quand téléphone + nom complet + email sont présents (peu importe le métier).
 """
     greet = f"\nMessage d'accueil recommandé : {greeting}\n" if greeting else ""
     return f"{base}\n{biz}\n{guide}\n{greet}"
+
 
 # ======= LLM avec retry exponentiel =======
 def call_llm_with_history(system_prompt: str, history: list, user_input: str) -> str:
