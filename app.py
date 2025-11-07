@@ -347,6 +347,19 @@ BOTS = {
     "avocat-001":  {"pack":"avocat","name":"Betty Bot (Avocat)","color":"#4F46E5","avatar_file":"avocat.jpg","profile":{},"greeting":"","buyer_email":None,"owner_name":None,"public_id":None},
     "immo-002":    {"pack":"immo","name":"Betty Bot (Immobilier)","color":"#16A34A","avatar_file":"immo.jpg","profile":{},"greeting":"","buyer_email":None,"owner_name":None,"public_id":None},
     "medecin-003": {"pack":"medecin","name":"Betty Bot (Médecin)","color":"#0284C7","avatar_file":"medecin.jpg","profile":{},"greeting":"","buyer_email":None,"owner_name":None,"public_id":None},
+        # --- Démo page d'accueil (avatar avocat conservé)
+    "spectra-demo": {
+        "pack": "avocat",
+        "name": "Betty Bot (Spectra Media)",
+        "color": "#4F46E5",
+        "avatar_file": "avocat.jpg",
+        "profile": {},
+        "greeting": "Bonjour et bienvenue chez Spectra Media. Souhaitez-vous créer votre Betty Bot métier ?",
+        "buyer_email": None,
+        "owner_name": "Spectra Media",
+        "public_id": "spectra-demo"
+    },
+
 }
 
 def _gen_public_id(email: str, bot_key: str) -> str:
