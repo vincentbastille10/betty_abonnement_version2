@@ -21,99 +21,32 @@
       flex-direction:column;
       height:100vh;
     }
-
-    /* Header toujours visible, même en mode embed */
     header{
-      display:flex;
-      align-items:center;
-      gap:12px;
-      padding:10px 14px;
-      border-bottom:1px solid var(--line);
-      background:#0d1220;
+      display:flex; align-items:center; gap:12px;
+      padding:10px 14px; border-bottom:1px solid var(--line); background:#0d1220;
     }
-    header.compact{
-      padding:6px 12px;
-      border-bottom:1px solid var(--line);
-    }
-    .avatar{
-      width:40px;
-      height:40px;
-      border-radius:10px;
-      overflow:hidden;
-      border:1px solid var(--line);
-      background:#0c0f16;
-      flex-shrink:0;
-    }
-    .avatar img{
-      width:100%;
-      height:100%;
-      object-fit:cover;
-    }
-    h1{
-      font-size:15px;
-      font-weight:600;
-      line-height:1.2;
-      margin:0;
-    }
-    .sub{
-      font-size:12px;
-      color:var(--muted);
-    }
+    header.compact{ padding:6px 12px; }
+    .avatar{ width:40px; height:40px; border-radius:10px; overflow:hidden; border:1px solid var(--line); background:#0c0f16; flex-shrink:0; }
+    .avatar img{ width:100%; height:100%; object-fit:cover; }
+    h1{ font-size:15px; font-weight:600; line-height:1.2; margin:0; }
+    .sub{ font-size:12px; color:var(--muted); }
 
-    /* Zone de chat */
-    .chat-box{
-      flex:1;
-      overflow-y:auto;
-      padding:14px;
-      scroll-behavior:smooth;
-    }
-    .msg{
-      max-width:80%;
-      margin:8px 0;
-      padding:10px 14px;
-      border-radius:12px;
-      line-height:1.4;
-      word-wrap:break-word;
-      white-space:pre-wrap;
-    }
-    .user{background:#1a2140;color:#fff;margin-left:auto;}
-    .bot{background:#141a2f;color:var(--ink);}
+    .chat-box{ flex:1; overflow-y:auto; padding:14px; scroll-behavior:smooth; }
+    .msg{ max-width:80%; margin:8px 0; padding:10px 14px; border-radius:12px; line-height:1.4; word-wrap:break-word; white-space:pre-wrap; }
+    .user{ background:#1a2140; color:#fff; margin-left:auto; }
+    .bot{ background:#141a2f; color:var(--ink); }
 
-    /* Input */
-    form{
-      display:flex;
-      padding:10px;
-      border-top:1px solid var(--line);
-      background:#0d1220;
-    }
-    input[type=text]{
-      flex:1;
-      background:#0a0f20;
-      border:1px solid var(--line);
-      border-radius:10px;
-      color:var(--ink);
-      font-size:14px;
-      padding:10px 12px;
-    }
-    button{
-      background:var(--brand);
-      border:0;
-      border-radius:10px;
-      color:#fff;
-      padding:10px 16px;
-      font-weight:600;
-      margin-left:8px;
-      cursor:pointer;
-    }
+    form{ display:flex; padding:10px; border-top:1px solid var(--line); background:#0d1220; }
+    input[type=text]{ flex:1; background:#0a0f20; border:1px solid var(--line); border-radius:10px; color:var(--ink); font-size:14px; padding:10px 12px; }
+    button{ background:var(--brand); border:0; border-radius:10px; color:#fff; padding:10px 16px; font-weight:600; margin-left:8px; cursor:pointer; }
   </style>
 </head>
 <body>
 
-  <!-- Header toujours affiché -->
   <header class="{{ 'compact' if embed else '' }}">
     <div class="avatar">
       <img src="{{ avatar_url }}" alt="avatar"
-           onerror="this.onerror=null;this.src='/avatar/{{ cfg.pack or 'immo' }}'">
+           onerror="this.onerror=null;this.src='/avatar/immo'">
     </div>
     <div>
       <h1>{{ full_name or "Betty Bot" }}</h1>
@@ -157,7 +90,12 @@
         const res = await fetch("/api/bettybot", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ message: msg, public_id: BOT_ID, conv_id: convId, buyer_email: BUYER_EMAIL })
+          body: JSON.stringify({
+            message: msg,
+            public_id: BOT_ID,
+            conv_id: convId,
+            buyer_email: BUYER_EMAIL
+          })
         });
         const data = await res.json();
         if (data.response) appendMsg("bot", data.response);
