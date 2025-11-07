@@ -98,7 +98,12 @@
           })
         });
         const data = await res.json();
-        if (data.response) appendMsg("bot", data.response);
+        if (data.response) {
+          // retire le tag <LEAD_JSON>...</LEAD_JSON> éventuel à la fin de la réponse
+          const cleaned = String(data.response).replace(/<LEAD_JSON>[\s\S]*<\/LEAD_JSON>\s*$/,'').trim();
+          appendMsg("bot", cleaned || ""); 
+        }
+
       } catch (err) {
         appendMsg("bot", "⚠️ Erreur de connexion, veuillez réessayer.");
       }
