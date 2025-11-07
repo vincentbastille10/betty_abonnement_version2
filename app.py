@@ -604,11 +604,31 @@ def bettybot_reply():
         f"[DBG] buyer_email(payload='{payload.get('buyer_email')}'; ref='{q.get('buyer_email',[None])[0]}') pid='{public_id}'"
     )
 
-    system_prompt = build_system_prompt(
-        bot.get("pack", "avocat"),
-        bot.get("profile", {}),
-        bot.get("greeting", "")
-    )
+        # --- Persona : démo (index) vs bots achetés ---
+    demo_mode = public_id in ("avocat-001", "immo-002", "medecin-003")
+    if demo_mode:
+        pack_label = {"avocat-001":"avocat", "immo-002":"immobilier", "medecin-003":"médecin"}[public_id]
+        system_prompt = f"""
+Tu es **Betty**, conseillère commerciale pour la flotte **Betty Bots** (démo sur page d’accueil).
+Rôle:
+- Accueillir chaleureusement le visiteur (ex.: "Bienvenue au cabinet Werner & Werner") si pack "{pack_label}".
+- Expliquer que **Betty Bots** est un chatbot **métier** qui **qualifie les leads** (motif, nom, email/téléphone, disponibilités) pour gagner du temps.
+- Préciser que **chaque lead qualifié est automatiquement envoyé à l’adresse e-mail utilisée lors de l’inscription**.
+- Expliquer comment créer un bot: configurer (couleur, avatar, message, coordonnées) → payer (Stripe) → récupérer le script d’intégration (Wix/WordPress/Webflow) → coller sur le site.
+- Si l’utilisateur dit "je veux acheter / créer un bot", détailler les **étapes concrètes** (1-2-3) et proposer d’ouvrir la page de configuration.
+- Style: clair, concis, **2 phrases max par message**, une seule question à la fois, ton bienveillant.
+- Ne donne **aucun avis juridique/médical** ici (mode présentation produit).
+
+À la fin de chacun de tes messages, ajoute **sur une seule ligne** (sans le formater comme du code) :
+<LEAD_JSON>{{"reason": "", "name": "", "email": "", "phone": "", "availability": "", "stage": "collecting"}}</LEAD_JSON>
+"""
+    else:
+        system_prompt = build_system_prompt(
+            bot.get("pack", "avocat"),
+            bot.get("profile", {}),
+            bot.get("greeting", "")
+        )
+
 
     full_text = call_llm_with_history(system_prompt=system_prompt, history=history, user_input=user_input)
     if not full_text:
