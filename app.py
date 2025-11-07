@@ -563,10 +563,24 @@ def recap_page():
     avatar_file = bot.get("avatar_file") or f"logo-{slug}.jpg"
 
     # URL d'embed et snippet prêt à coller (Wix/Webflow/Squarespace)
-    embed_url = f"{BASE_URL}/chat?public_id={bot.get('public_id')}&embed=1"
-    iframe_snippet = (
-        '<div style="position:relative;width:100%;max-width:420px;height:620px;margin:0 auto;">\n'
-        f'  <iframe src="{embed_url}" title="{full_name}" '
+    # Création du lien d’intégration avec l’email de l’acheteur
+params = {"public_id": bot.get("public_id"), "embed": "1"}
+buyer = (bot.get("buyer_email") or "").strip()
+if buyer:
+    params["buyer_email"] = buyer
+
+embed_url = f"{BASE_URL}/chat?{urlencode(params)}"
+
+iframe_snippet = (
+    '<div style="position:relative;width:100%;max-width:420px;height:620px;margin:0 auto;">\n'
+    f'  <iframe src="{embed_url}" title="{full_name}" '
+    'style="width:100%;height:100%;border:0;border-radius:16px;'
+    'box-shadow:0 10px 30px rgba(0,0,0,.25);background:#0b0f1e;" '
+    'loading="lazy" referrerpolicy="no-referrer-when-downgrade" '
+    'allow="clipboard-read; clipboard-write; microphone; autoplay"></iframe>\n'
+    '</div>'
+)
+
         'style="width:100%;height:100%;border:0;border-radius:16px;'
         'box-shadow:0 10px 30px rgba(0,0,0,.25);background:#0b0f1e;" '
         'loading="lazy" referrerpolicy="no-referrer-when-downgrade" '
