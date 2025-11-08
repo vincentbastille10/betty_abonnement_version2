@@ -1,9 +1,9 @@
 {
   "version": 2,
   "functions": {
-    "api/ping.py": { "runtime": "python3.12" }
+    "api/**/*.py": { "runtime": "python3.11" }
   },
   "routes": [
-    { "src": "/api/ping", "dest": "api/ping.py" }
+    { "src": "/api/ping", "dest": "/api/ping.py" }
   ]
 }
