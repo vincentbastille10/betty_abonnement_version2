@@ -1,11 +1,7 @@
-# api/index.py — adaptateur Vercel -> Flask
-
-try:
-    from app import app as app
-except Exception as e:
-    import traceback
-    print("[BOOT][ERROR] Import app.py failed:", e)
-    traceback.print_exc()
-    def app(environ, start_response):
-        start_response('500 Internal Server Error', [('Content-Type', 'text/plain; charset=utf-8')])
-        return [b"App failed to load. Check Vercel function logs for stack trace."]
+# api/index.py
+def handler(request):
+    return (
+        200,
+        { "Content-Type": "text/html; charset=utf-8" },
+        b"<!doctype html><meta charset='utf-8'><title>Betty</title><h1>Betty Bots</h1><p>Home OK</p>"
+    )
