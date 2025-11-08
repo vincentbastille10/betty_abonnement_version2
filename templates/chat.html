@@ -2,133 +2,91 @@
 <html lang="fr">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>{{ title or 'Betty — Chat' }}</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>{{ title or "Betty — Chat" }}</title>
   <style>
-    body {
-      margin: 0;
-      padding: 0;
-      font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen,
-        Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
-      background: #0b0f1e;
-      color: #f1f5f9;
-      height: 100vh;
-      display: flex;
-      flex-direction: column;
-    }
-    .header {
-      padding: 12px 16px;
-      background: {{ color }};
-      color: white;
-      font-weight: bold;
-      border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-    }
-    .chat-container {
-      flex: 1;
-      padding: 16px;
-      overflow-y: auto;
-    }
-    .message {
-      margin-bottom: 8px;
-      line-height: 1.4;
-    }
-    .message.user {
-      text-align: right;
-      color: #e0e7ff;
-    }
-    .message.bot {
-      text-align: left;
-      color: #f9fafb;
-    }
-    .input-bar {
-      display: flex;
-      padding: 8px;
-      border-top: 1px solid rgba(255, 255, 255, 0.1);
-    }
-    .input-bar input {
-      flex: 1;
-      padding: 8px;
-      border-radius: 8px;
-      border: none;
-      margin-right: 8px;
-    }
-    .input-bar button {
-      padding: 8px 12px;
-      border: none;
-      border-radius: 8px;
-      background: {{ color }};
-      color: white;
-      cursor: pointer;
-    }
+    :root{--bg:#0b0f1e;--card:#0f1724;--ink:#e8ecff}
+    body{margin:0;background:var(--bg);color:var(--ink);font-family:Inter,system-ui,Segoe UI,Roboto,Arial}
+    .wrap{max-width:920px;margin:32px auto;padding:24px;background:var(--card);border-radius:12px}
+    .header{display:flex;align-items:center;gap:16px}
+    .avatar{width:64px;height:64px;border-radius:12px;object-fit:cover}
+    .title{font-size:18px;margin:0}
+    .greet{color:#b8c2d6;margin-top:6px}
+    #messages{margin-top:18px;background:#071020;padding:14px;border-radius:8px;min-height:240px;max-height:420px;overflow:auto}
+    .msg{padding:8px 10px;border-radius:8px;margin-bottom:8px}
+    .user{background:#1f2937;text-align:right}
+    .bot{background:#0b1222;text-align:left}
+    .footer{display:flex;gap:8px;margin-top:12px}
+    input[type=text]{flex:1;padding:10px;border-radius:8px;border:1px solid rgba(255,255,255,.06);background:#07101b;color:var(--ink)}
+    button{padding:10px 14px;border-radius:8px;border:0;background:{{ color or '#4F46E5' }};color:white;cursor:pointer}
+    .small{font-size:13px;color:#9aa7c7}
   </style>
 </head>
 <body>
-  <div class="header">{{ header_title or 'Betty Bot' }}</div>
-  <div id="chat" class="chat-container"></div>
-  <form id="chat-form" class="input-bar">
-    <input id="chat-input" type="text" placeholder="Votre message…" autocomplete="off" />
-    <button type="submit">Envoyer</button>
-  </form>
+  <div class="wrap" role="main">
+    <div class="header">
+      <img class="avatar" src="{{ avatar_url }}" alt="avatar">
+      <div>
+        <h1 class="title">{{ full_name }}</h1>
+        <div class="greet">{{ greeting }}</div>
+        <div class="small">Bot ID: {{ public_id }}</div>
+        {% if buyer_email %}
+          <div class="small">Adresse acheteur : {{ buyer_email }}</div>
+        {% endif %}
+      </div>
+    </div>
+
+    <div id="messages" aria-live="polite"></div>
+
+    <div class="footer">
+      <input id="input" type="text" placeholder="Ecrivez votre message ici..." />
+      <button id="send">Envoyer</button>
+    </div>
+    <div style="margin-top:10px" class="small">Les leads complets (nom + téléphone + e-mail) sont transmis automatiquement à l'adresse associée au bot.</div>
+  </div>
 
   <script>
-    // Identifiants transmis par le serveur
-    const PUBLIC_ID = "{{ public_id }}";
-    const BUYER_EMAIL = "{{ buyer_email }}";
-    const BASE_URL = "{{ base_url }}";
-    // Contexte conversationnel côté client (conv_id)
-    let convId = "";
-    // Référence des éléments
-    const chatEl = document.getElementById('chat');
-    const inputEl = document.getElementById('chat-input');
-    const formEl = document.getElementById('chat-form');
+    const publicId = "{{ public_id }}";
+    const buyerEmail = "{{ buyer_email }}";
+    const apiUrl = "/api/bettybot";
 
-    function addMessage(content, role) {
-      const msg = document.createElement('div');
-      msg.className = 'message ' + role;
-      msg.innerText = content;
-      chatEl.appendChild(msg);
-      chatEl.scrollTop = chatEl.scrollHeight;
+    function addMsg(text, cls="bot") {
+      const m = document.createElement("div");
+      m.className = "msg " + cls;
+      m.innerText = text;
+      document.getElementById("messages").appendChild(m);
+      m.scrollIntoView({behavior:"smooth", block:"end"});
     }
 
-    async function sendMessage(text) {
-      if (!text) return;
-      addMessage(text, 'user');
-      inputEl.value = '';
-      try {
-        const res = await fetch(BASE_URL + '/api/bettybot', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+    document.getElementById("send").addEventListener("click", send);
+    document.getElementById("input").addEventListener("keydown", function(e){ if(e.key === "Enter"){ send(); } });
+
+    async function send(){
+      const el = document.getElementById("input");
+      const text = el.value.trim();
+      if(!text) return;
+      addMsg(text, "user");
+      el.value = "";
+      try{
+        const resp = await fetch(apiUrl, {
+          method:"POST",
+          headers: {"Content-Type":"application/json"},
           body: JSON.stringify({
-            public_id: PUBLIC_ID,
-            buyer_email: BUYER_EMAIL,
-            conv_id: convId,
-            message: text
+            message: text,
+            public_id: publicId,
+            buyer_email: buyerEmail
           })
         });
-        const data = await res.json();
-        if (data && data.response) {
-          addMessage(data.response, 'bot');
-        }
-        // Mise à jour conv_id si renvoyé
-        if (data && data.conv_id) {
-          convId = data.conv_id;
-        }
-      } catch (err) {
-        addMessage('Erreur: ' + err, 'bot');
+        const data = await resp.json();
+        addMsg(data.response || "Désolé, pas de réponse", "bot");
+      }catch(e){
+        addMsg("Erreur de connexion au serveur.", "bot");
+        console.error(e);
       }
     }
 
-    // Afficher le message d'accueil du bot
-    if ("{{ greeting }}") {
-      addMessage("{{ greeting }}", 'bot');
-    }
-    formEl.addEventListener('submit', function (e) {
-      e.preventDefault();
-      const text = inputEl.value.trim();
-      if (text) {
-        sendMessage(text);
-      }
-    });
+    // welcome example
+    addMsg("Bonjour. Je suis votre assistante. Comment puis-je aider ?", "bot");
   </script>
 </body>
 </html>
