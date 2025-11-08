@@ -10,3 +10,11 @@
     { "src": "/(.*)", "dest": "api/index.py" }
   ]
 }
+{
+  "routes": [
+    { "src": "/favicon.ico", "status": 204 },
+    { "src": "/favicon.png", "status": 204 },
+    { "src": "/api/(.*)", "dest": "api/$1.py" },
+    { "src": "/(.*)", "dest": "api/index.py" }
+  ]
+}
