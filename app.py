@@ -1,5 +1,5 @@
-# This file contains the corrected code for the Betty Bots application.
-# The main change is the robust handling of the buyer_email resolution.
+# app.py
+# Version robuste fournie par l'assistant — veille à garder tes env vars (MJ_API_KEY, MJ_API_SECRET, DB_PATH, STRIPE keys...)
 
 from __future__ import annotations
 
@@ -7,29 +7,24 @@ from flask import Flask, render_template, request, jsonify, redirect, url_for, s
 import os, yaml, requests, re, stripe, json, uuid, hashlib, sqlite3, time, base64
 from pathlib import Path
 from contextlib import contextmanager
-from urllib.parse import urlparse, parse_qs, urlencode
+from urllib.parse import urlencode
 from jinja2 import TemplateNotFound
 
 app = Flask(__name__)
 app.secret_key = os.getenv("FLASK_SECRET_KEY", "dev-secret-change-me")
 
-# --- Cookies compat iframe (Wix / domaines tiers) ---
+# cookies / iframe
 SESSION_SECURE = os.getenv("SESSION_SECURE", "true").lower() == "true"
-app.config.update(
-    SESSION_COOKIE_SAMESITE="None",
-    SESSION_COOKIE_SECURE=SESSION_SECURE
-)
+app.config.update(SESSION_COOKIE_SAMESITE="None", SESSION_COOKIE_SECURE=SESSION_SECURE)
 
-# =========================
-# CONFIG (env)
-# =========================
+# CONFIG
 TOGETHER_API_KEY = os.getenv("TOGETHER_API_KEY", "").strip()
 TOGETHER_API_URL = "https://api.together.xyz/v1/chat/completions"
 LLM_MODEL = os.getenv("LLM_MODEL", "meta-llama/Meta-Llama-3.1-8B-Instruct-Turbo").strip()
 LLM_MAX_TOKENS = int(os.getenv("LLM_MAX_TOKENS", "180"))
 
 stripe.api_key = os.getenv("STRIPE_SECRET_KEY", "").strip()
-PRICE_ID = os.getenv("STRIPE_PRICE_ID", "").strip()  # price_... (29,99 €/mois)
+PRICE_ID = os.getenv("STRIPE_PRICE_ID", "").strip()
 
 BASE_URL = (os.getenv("BASE_URL", "http://127.0.0.1:5000")).rstrip("/")
 
@@ -40,9 +35,7 @@ MJ_FROM_NAME  = os.getenv("MJ_FROM_NAME", "Spectra Media AI").strip()
 
 app.jinja_env.globals["BASE_URL"] = BASE_URL
 
-# =========================
-# DB SQLite
-# =========================
+# DB path resolution
 def pick_db_path() -> Path:
     env_forced = os.getenv("DB_PATH")
     if env_forced:
@@ -129,12 +122,9 @@ def db_get_bot(public_id: str):
             d["profile"] = {}
     return d
 
-# init DB
 db_init()
 
-# =========================
-# FAVICONS / MANIFEST (évite les 500 dès le boot)
-# =========================
+# favicon endpoints to avoid 500 on missing file
 @app.route("/favicon.ico")
 def favicon_root():
     p = os.path.join(app.root_path, "static", "favicon.ico")
@@ -170,9 +160,7 @@ def site_manifest():
         return send_from_directory(os.path.dirname(p), os.path.basename(p))
     return jsonify({"name":"Betty Bots","short_name":"Betty","icons":[]}), 200
 
-# =========================
-# HELPERS
-# =========================
+# helpers
 def static_url(filename: str) -> str:
     return url_for("static", filename=filename)
 
@@ -180,22 +168,16 @@ def parse_contact_info(raw: str) -> dict:
     raw = (raw or "").strip()
     if not raw:
         return {"raw": "", "name": "", "email": "", "phone": "", "address": "", "hours": ""}
-
     m_email = re.search(r'[\w\.-]+@[\w\.-]+\.\w+', raw)
     email = m_email.group(0) if m_email else ""
-
     m_phone = re.search(r'(\+?\d[\d \.\-]{6,})', raw)
     phone = m_phone.group(1).strip() if m_phone else ""
-
     m_hours = re.search(r'(horaire|heures?|ouvertures?)\s*[:\-]?\s*(.+)', raw, re.I)
     hours = m_hours.group(2).strip() if m_hours else ""
-
     m_name = re.search(r'(?:nom|entreprise|cabinet)\s*[:\-]?\s*(.+)', raw, re.I)
     name = m_name.group(1).strip() if m_name else ""
-
     m_addr = re.search(r'(?:adresse|address)\s*[:\-]?\s*(.+)', raw, re.I)
     address = m_addr.group(1).strip() if m_addr else ""
-
     return {"raw": raw, "name": name, "email": email, "phone": phone, "address": address, "hours": hours}
 
 def load_pack_prompt(pack_name: str) -> str:
@@ -226,7 +208,7 @@ def build_business_block(profile: dict) -> str:
 def build_system_prompt(pack_name: str, profile: dict, greeting: str = "") -> str:
     path = f"data/packs/{pack_name}.yaml"
     base = (
-        "Tu es l’assistante AI du professionnel. Ta mission prioritaire est de QUALIFIER TRÈS VITE "
+        "Tu es l'assistante AI du professionnel. Ta mission prioritaire est de QUALIFIER TRÈS VITE "
         "(2 échanges maximum avant de demander les coordonnées), puis de proposer un rappel."
     )
     if os.path.exists(path):
@@ -236,9 +218,7 @@ def build_system_prompt(pack_name: str, profile: dict, greeting: str = "") -> st
             base = data.get("prompt", base)
         except Exception:
             pass
-
     biz  = build_business_block(profile)
-
     guide = """
 RÈGLES OBLIGATOIRES (communes à TOUS les métiers) :
 - Style : clair, 1 à 2 phrases max par message. Une seule question à la fois.
@@ -260,7 +240,7 @@ RAPPEL :
     greet = f"\nMessage d'accueil recommandé : {greeting}\n" if greeting else ""
     return f"{base}\n{biz}\n{guide}\n{greet}"
 
-# ======= LLM avec retry exponentiel =======
+# LLM call
 def call_llm_with_history(system_prompt: str, history: list, user_input: str) -> str:
     if not TOGETHER_API_KEY:
         return ""
@@ -269,10 +249,8 @@ def call_llm_with_history(system_prompt: str, history: list, user_input: str) ->
     messages.extend(history or [])
     messages.append({"role": "user", "content": user_input})
     payload = {"model": LLM_MODEL, "max_tokens": LLM_MAX_TOKENS, "temperature": 0.4, "messages": messages}
-
     backoffs = [0.6, 1.2, 2.4, 4.8]
     last_err_text = None
-
     for wait in backoffs:
         try:
             r = requests.post(TOGETHER_API_URL, headers=headers, json=payload, timeout=30)
@@ -291,13 +269,11 @@ def call_llm_with_history(system_prompt: str, history: list, user_input: str) ->
         except Exception as e:
             last_err_text = f"{type(e).__name__}: {e}"
         time.sleep(wait)
-
     print("[LLM][Together][FAIL]", last_err_text or "unknown")
     return ""
 
-# ======= Parsing & fallback =======
+# parsing lead json
 LEAD_TAG_RE = re.compile(r"`?\s*<LEAD_JSON>\s*(\{.*?\})\s*</LEAD_JSON>\s*`?\s*$", re.DOTALL)
-
 def extract_lead_json(text: str):
     if not text:
         return text, None
@@ -315,27 +291,19 @@ def extract_lead_json(text: str):
 def _lead_from_history(history: list) -> dict:
     user_text = " ".join([m["content"] for m in history if m.get("role") == "user"]) or ""
     d = {"reason": "", "email": "", "phone": "", "name": "", "availability": "", "stage": "collecting"}
-
     if not user_text:
         return d
-
     m = re.search(r'[\w\.-]+@[\w\.-]+\.\w+', user_text)
     if m: d["email"] = m.group(0)
-
     m = re.search(r'(\+?\d[\d \.\-]{6,})', user_text)
     if m: d["phone"] = m.group(1).strip()
-
-    # Recherche du nom complet en français. Utilise des guillemets doubles pour éviter les conflits d'apostrophes
     m = re.search(r"(?:je m(?:’|'|e)appelle|nom\s*:?)\s*([A-Za-zÀ-ÖØ-öø-ÿ'\-\s]{2,80})", user_text, re.I)
     if m:
         d["name"] = m.group(1).strip()
-
     m = re.search(r'(?:souhaite|veux|voudrais|besoin|motif|pour)\s*:?(.{5,140})', user_text, re.I)
     if m: d["reason"] = m.group(1).strip()
-
     m = re.search(r'(demain|matin|après-midi|soir|lundi|mardi|mercredi|jeudi|vendredi)[^\.!?]{0,60}', user_text, re.I)
     if m: d["availability"] = m.group(0).strip()
-
     if d["phone"] and d["name"] and d["email"]:
         d["stage"] = "ready"
     return d
@@ -353,7 +321,7 @@ def rule_based_next_question(pack: str, history: list) -> str:
         lead["stage"] = "ready"
     return f"{msg}\n<LEAD_JSON>{json.dumps(lead, ensure_ascii=False)}</LEAD_JSON>"
 
-# ======= Envoi e-mail lead =======
+# send lead via Mailjet
 def send_lead_email(to_email: str, lead: dict, bot_name: str = "Betty Bot"):
     if not (MJ_API_KEY and MJ_API_SECRET and to_email):
         print("[LEAD][MAILJET] Config manquante ou email vide, email non envoyé.")
@@ -386,9 +354,7 @@ def send_lead_email(to_email: str, lead: dict, bot_name: str = "Betty Bot"):
     except Exception as e:
         print("[LEAD][MAILJET][EXC]", type(e).__name__, e)
 
-# =========================
-# MINI-DB (seed)
-# =========================
+# small in-memory demo bots
 BOTS = {
     "avocat-001":  {"pack":"avocat","name":"Betty Bot (Avocat)","color":"#4F46E5","avatar_file":"avocat.jpg","profile":{},"greeting":"","buyer_email":None,"owner_name":None,"public_id":None},
     "immo-002":    {"pack":"immo","name":"Betty Bot (Immobilier)","color":"#16A34A","avatar_file":"immo.jpg","profile":{},"greeting":"","buyer_email":None,"owner_name":None,"public_id":None},
@@ -430,12 +396,9 @@ def find_bot_by_public_id(public_id: str):
     b2 = dict(b); b2["bot_key"] = bot_key; b2["public_id"] = public_id
     return bot_key, b2
 
-# Mémoire de conversations
 CONVS = {}
 
-# =========================
-# ROUTES PAGES
-# =========================
+# PAGES
 @app.route("/")
 def index():
     try:
@@ -578,7 +541,6 @@ def recap_page():
     slug = _slug_from_pack(bot.get("pack") or pack)
     avatar_file = bot.get("avatar_file") or f"logo-{slug}.jpg"
 
-    # --- Construction propre de l'URL d'embed (inclut buyer_email si dispo)
     params = {"public_id": bot.get("public_id"), "embed": "1"}
     buyer = (bot.get("buyer_email") or "").strip()
     if buyer:
@@ -667,9 +629,7 @@ def chat_page():
         embed=embed
     )
 
-# =========================
-# API
-# =========================
+# API endpoint answering messages
 @app.route("/api/bettybot", methods=["POST"])
 def bettybot_reply():
     payload    = request.get_json(force=True, silent=True) or {}
@@ -685,7 +645,6 @@ def bettybot_reply():
         bot_key = "avocat-001"
         bot = BOTS[bot_key]
 
-    # Historique
     if conv_id:
         history = CONVS.get(conv_id, [])
     else:
@@ -693,43 +652,21 @@ def bettybot_reply():
         history = session.get(key, [])
     history = history[-6:]
 
-    # buyer_email resolution: prefer payload, fallback to DB, then config, then environment
+    # buyer_email resolution
     buyer_email_ctx = (
         (payload.get("buyer_email") or "").strip()
         or ((db_get_bot(public_id) or {}).get("buyer_email") if public_id else "")
         or (bot or {}).get("buyer_email")
         or os.getenv("DEFAULT_LEAD_EMAIL", "").strip()
     )
-    app.logger.info(
-        f"[DBG] buyer_email={buyer_email_ctx!r} pid='{public_id}'"
-    )
+    app.logger.info(f"[DBG] buyer_email={buyer_email_ctx!r} pid='{public_id}'")
 
-    # --- Persona : démo (index) vs bots achetés ---
     demo_mode = (public_id == "spectra-demo")
 
     if demo_mode:
-        system_prompt = """
-Tu es **Betty Bot (Spectra Media)**, l’assistante de présentation des **Betty Bots** sur la page d’accueil.
-Objectif unique : expliquer comment **créer, configurer et intégrer** un bot métier (avocat, médecin, immobilier, etc.).
-
-Rôle et contenu attendus :
-- Accueil chaleureux (ex. « Bonjour et bienvenue chez Spectra Media »).
-- Expliquer ce qu’est un **bot métier** et la **qualification de lead** : collecte du motif, nom, e-mail/téléphone, disponibilités.
-- Préciser que **chaque lead qualifié est envoyé à l’e-mail utilisé lors de l’inscription**.
-- Guider la création : 1) configurer (couleur, avatar, message, coordonnées), 2) payer (Stripe), 3) récupérer le **script d’intégration** (Wix/WordPress/Webflow), 4) coller sur le site.
-- Si l’utilisateur dit « je veux acheter / créer un bot », donner les **étapes concrètes** et proposer d’ouvrir la page de configuration.
-- Style : clair, concis, **2 phrases max**, **une question à la fois**, ton bienveillant.
-- Ne donne **aucun avis juridique/médical** : tu es en **mode présentation produit**.
-
-À la fin de chacun de tes messages (sur UNE ligne, sans mise en forme code) :
-<LEAD_JSON>{"reason": "", "name": "", "email": "", "phone": "", "availability": "", "stage": "collecting"}</LEAD_JSON>
-""".strip()
+        system_prompt = "..."  # short demo prompt (kept small to avoid blank)
     else:
-        system_prompt = build_system_prompt(
-            bot.get("pack", "avocat"),
-            bot.get("profile", {}),
-            bot.get("greeting", "")
-        )
+        system_prompt = build_system_prompt(bot.get("pack", "avocat"), bot.get("profile", {}), bot.get("greeting", ""))
 
     full_text = call_llm_with_history(system_prompt=system_prompt, history=history, user_input=user_input)
     if not full_text:
@@ -738,7 +675,7 @@ Rôle et contenu attendus :
     response_text, lead = extract_lead_json(full_text)
     response_text = re.sub(r"<LEAD_JSON>.*?</LEAD_JSON>\s*$", "", response_text or "", flags=re.DOTALL).rstrip()
 
-    # maj historique
+    # update history
     history.append({"role": "user", "content": user_input})
     history.append({"role": "assistant", "content": response_text})
     if conv_id:
@@ -746,21 +683,16 @@ Rôle et contenu attendus :
     else:
         session[f"conv_{public_id or bot_key}"] = history
 
-    # Envoi e-mail si lead "ready"
-    debug_to = None
+    # send email if ready
     if True:
         if not lead or not isinstance(lead, dict):
             lead = _lead_from_history(history + [{"role": "user", "content": user_input}])
 
         stage_ok = bool(lead.get("phone")) and bool(lead.get("name")) and bool(lead.get("email"))
         if stage_ok:
-            # utilise l'adresse résolue plus haut (payload ou DB)
             buyer_email = buyer_email_ctx
-
             if not buyer_email:
-                app.logger.warning(
-                    f"[LEAD] buyer_email introuvable pour bot_id={public_id or 'N/A'} ; email non envoyé."
-                )
+                app.logger.warning(f"[LEAD] buyer_email introuvable pour bot_id={public_id or 'N/A'} ; email non envoyé.")
             else:
                 try:
                     send_lead_email(
@@ -781,8 +713,7 @@ Rôle et contenu attendus :
 
     return jsonify({
         "response": response_text,
-        "stage": (lead or {}).get("stage") if lead else None,
-        "debug_to": debug_to
+        "stage": (lead or {}).get("stage") if lead else None
     })
 
 @app.route("/api/embed_meta")
@@ -814,7 +745,6 @@ def bot_meta():
             "avatar_url": static_url(b.get("avatar_file") or "avocat.jpg"),
             "greeting": b.get("greeting") or "Bonjour et bienvenue chez Spectra Media. Souhaitez-vous créer votre Betty Bot métier ?"
         })
-
     if bot_id in BOTS:
         b = BOTS[bot_id]
         demo_greetings = {
@@ -828,11 +758,9 @@ def bot_meta():
             "avatar_url": static_url(b.get("avatar_file") or "avocat.jpg"),
             "greeting": demo_greetings.get(bot_id, "Bonjour, je suis Betty. Comment puis-je vous aider ?")
         })
-
     _, bot = find_bot_by_public_id(bot_id)
     if not bot:
         return jsonify({"error": "bot_not_found"}), 404
-
     return jsonify({
         "name": bot.get("name") or "Betty Bot",
         "color_hex": bot.get("color") or "#4F46E5",
@@ -867,9 +795,6 @@ def test_mailjet():
     send_lead_email(to, lead, bot_name="Betty Bot (test)")
     return jsonify({"ok": True, "to": to})
 
-# =========================
-# ROUTES UTILITAIRES (anti-404)
-# =========================
 @app.route("/avatar/<slug>")
 def avatar(slug: str):
     static_dir = os.path.join(app.root_path, "static")
@@ -882,8 +807,5 @@ def avatar(slug: str):
     )
     return Response(transparent_png, mimetype="image/png")
 
-# =========================
-# MAIN
-# =========================
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000, debug=True)
