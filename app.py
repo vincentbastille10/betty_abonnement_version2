@@ -325,8 +325,10 @@ def _lead_from_history(history: list) -> dict:
     m = re.search(r'(\+?\d[\d \.\-]{6,})', user_text)
     if m: d["phone"] = m.group(1).strip()
 
-    m = re.search(r'(?:je m(?:’|'|e)appelle|nom\s*:?)\s*([A-Za-zÀ-ÖØ-öø-ÿ'\-\s]{2,80})', user_text, re.I)
-    if m: d["name"] = m.group(1).strip()
+    # Recherche du nom complet en français. Utilise des guillemets doubles pour éviter les conflits d'apostrophes
+    m = re.search(r"(?:je m(?:’|'|e)appelle|nom\s*:?)\s*([A-Za-zÀ-ÖØ-öø-ÿ'\-\s]{2,80})", user_text, re.I)
+    if m:
+        d["name"] = m.group(1).strip()
 
     m = re.search(r'(?:souhaite|veux|voudrais|besoin|motif|pour)\s*:?(.{5,140})', user_text, re.I)
     if m: d["reason"] = m.group(1).strip()
