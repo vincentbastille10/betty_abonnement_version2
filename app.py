@@ -1,5 +1,8 @@
-# app.py
+# This file contains the corrected code for the Betty Bots application.
+# The main change is the robust handling of the buyer_email resolution.
+
 from __future__ import annotations
+
 from flask import Flask, render_template, request, jsonify, redirect, url_for, session, send_from_directory, Response
 import os, yaml, requests, re, stripe, json, uuid, hashlib, sqlite3, time, base64
 from pathlib import Path
@@ -322,7 +325,7 @@ def _lead_from_history(history: list) -> dict:
     m = re.search(r'(\+?\d[\d \.\-]{6,})', user_text)
     if m: d["phone"] = m.group(1).strip()
 
-    m = re.search(r'(?:je m(?:’|\'|e)appelle|nom\s*:?)\s*([A-Za-zÀ-ÖØ-öø-ÿ\'\-\s]{2,80})', user_text, re.I)
+    m = re.search(r'(?:je m(?:’|'|e)appelle|nom\s*:?)\s*([A-Za-zÀ-ÖØ-öø-ÿ'\-\s]{2,80})', user_text, re.I)
     if m: d["name"] = m.group(1).strip()
 
     m = re.search(r'(?:souhaite|veux|voudrais|besoin|motif|pour)\s*:?(.{5,140})', user_text, re.I)
@@ -688,12 +691,15 @@ def bettybot_reply():
         history = session.get(key, [])
     history = history[-6:]
 
-    # buyer_email via payload ou referrer
-    referrer = request.referrer or ""
-    q = parse_qs(urlparse(referrer).query) if referrer else {}
-    buyer_email_ctx = (payload.get("buyer_email") or q.get("buyer_email", [None])[0] or "").strip()
+    # buyer_email resolution: prefer payload, fallback to DB, then config, then environment
+    buyer_email_ctx = (
+        (payload.get("buyer_email") or "").strip()
+        or ((db_get_bot(public_id) or {}).get("buyer_email") if public_id else "")
+        or (bot or {}).get("buyer_email")
+        or os.getenv("DEFAULT_LEAD_EMAIL", "").strip()
+    )
     app.logger.info(
-        f"[DBG] buyer_email(payload='{payload.get('buyer_email')}'; ref='{q.get('buyer_email',[None])[0]}') pid='{public_id}'"
+        f"[DBG] buyer_email={buyer_email_ctx!r} pid='{public_id}'"
     )
 
     # --- Persona : démo (index) vs bots achetés ---
@@ -746,13 +752,8 @@ Rôle et contenu attendus :
 
         stage_ok = bool(lead.get("phone")) and bool(lead.get("name")) and bool(lead.get("email"))
         if stage_ok:
-            buyer_email = (
-                ((db_get_bot(public_id) or {}).get("buyer_email") if public_id else None)
-                or (bot or {}).get("buyer_email")
-                or payload.get("buyer_email")
-                or buyer_email_ctx
-                or os.getenv("DEFAULT_LEAD_EMAIL")
-            )
+            # utilise l'adresse résolue plus haut (payload ou DB)
+            buyer_email = buyer_email_ctx
 
             if not buyer_email:
                 app.logger.warning(
