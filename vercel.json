@@ -1,7 +1,7 @@
 {
   "version": 2,
   "functions": {
-    "api/**/*.py": { "runtime": "python3.11", "maxDuration": 300 }
+    "api/**/*.py": { "runtime": "python3", "maxDuration": 300 }
   },
   "routes": [
     { "src": "/favicon.ico", "status": 204 },
