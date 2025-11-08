@@ -1,7 +1,7 @@
-# api/index.py — adaptateur Vercel -> Flask (WSGI)
+# api/index.py — adaptateur Vercel -> Flask
 
 try:
-    from app import app as app  # WSGI callable attendu par Vercel
+    from app import app as app
 except Exception as e:
     import traceback
     print("[BOOT][ERROR] Import app.py failed:", e)
