@@ -1,3 +1,7 @@
 # api/ping.py
 def handler(request):
-    return "OK"
+    return {
+        "statusCode": 200,
+        "headers": {"content-type": "text/plain; charset=utf-8"},
+        "body": "OK"
+    }
