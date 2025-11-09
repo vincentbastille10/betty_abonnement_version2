@@ -9,6 +9,7 @@ from pathlib import Path
 from contextlib import contextmanager
 from urllib.parse import urlencode
 from jinja2 import TemplateNotFound
+from app import app as application
 
 app = Flask(__name__)
 app.secret_key = os.getenv("FLASK_SECRET_KEY", "dev-secret-change-me")
