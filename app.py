@@ -1,15 +1,32 @@
 # app.py
 # Version robuste fournie par l'assistant — veille à garder tes env vars (MJ_API_KEY, MJ_API_SECRET, DB_PATH, STRIPE keys...)
 
+# app.py
 from __future__ import annotations
 
-from flask import Flask, render_template, request, jsonify, redirect, url_for, session, send_from_directory, Response
-import os, yaml, requests, re, stripe, json, uuid, hashlib, sqlite3, time, base64
+# Standard library
+import os
+import re
+import json
+import uuid
+import time
+import base64
+import sqlite3
+import hashlib
 from pathlib import Path
 from contextlib import contextmanager
 from urllib.parse import urlencode
+
+# Third-party
+from flask import (
+    Flask, render_template, request, jsonify, redirect,
+    url_for, session, send_from_directory, Response
+)
+import requests
+import stripe
+import yaml
 from jinja2 import TemplateNotFound
-from app import app as application
+
 
 app = Flask(__name__)
 app.secret_key = os.getenv("FLASK_SECRET_KEY", "dev-secret-change-me")
