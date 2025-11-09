@@ -26,6 +26,8 @@ import requests
 import stripe
 import yaml
 from jinja2 import TemplateNotFound
+import sys, traceback
+sys.excepthook = lambda t, v, tb: traceback.print_exception(t, v, tb)
 
 
 app = Flask(__name__)
