@@ -71,9 +71,10 @@ DB_PATH = pick_db_path()
 
 @contextmanager
 def db_connect():
-    con = sqlite3.connect(str(DB_PATH))
+    con = sqlite3.connect(str(DB_PATH), check_same_thread=False)
     con.row_factory = sqlite3.Row
     try:
+        con.execute("PRAGMA journal_mode=WAL;")
         yield con
     finally:
         con.close()
