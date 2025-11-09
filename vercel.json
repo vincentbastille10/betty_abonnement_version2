@@ -1,12 +1,11 @@
 {
-  "version": 2,
   "functions": {
-    "api/**/*.py": { "runtime": "python3", "maxDuration": 300 }
+    "api/index.py": {
+      "runtime": "python3.12"
+    }
   },
   "routes": [
-    { "src": "/favicon.ico", "status": 204 },
-    { "src": "/favicon.png", "status": 204 },
-    { "src": "/api/(.*)", "dest": "api/$1.py" },
-    { "src": "/(.*)", "dest": "api/index.py" }
+    { "src": "/api/(.*)", "dest": "/api/index.py" },
+    { "src": "/(.*)", "dest": "/api/index.py" }
   ]
 }
