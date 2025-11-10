@@ -3,7 +3,8 @@ Werkzeug==3.0.3
 Jinja2==3.1.4
 requests==2.32.3
 PyYAML==6.0.2
-stripe==11.11.0
+stripe==11.6.0
 vercel-wsgi==0.2.1
 # (facultatif) gunicorn n'est pas utilisé par Vercel :
 # gunicorn==21.2.0
+
