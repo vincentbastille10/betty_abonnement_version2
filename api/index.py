@@ -1,10 +1,2 @@
 # api/index.py
-def app(environ, start_response):
-    body = b"WSGI OK"
-    start_response("200 OK", [
-        ("Content-Type", "text/plain; charset=utf-8"),
-        ("Content-Length", str(len(body)))
-    ])
-    return [body]
-
-handler = app
+from app import app  # expose l'objet Flask "app" défini dans app.py
