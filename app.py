@@ -868,7 +868,7 @@ def embed_meta():
 
 @app.route("/api/bot_meta")
 def bot_meta():
-    bot_id = (request.args.get("bot_id") or request_args.get("public_id") or "").strip() if False else (request.args.get("bot_id") or request.args.get("public_id") or "").strip()
+    bot_id = (request.args.get("bot_id") or request.args.get("public_id") or "").strip()
     if bot_id == "spectra-demo":
         b = BOTS["spectra-demo"]
         return jsonify({
