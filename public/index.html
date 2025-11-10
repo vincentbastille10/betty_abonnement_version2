@@ -1,11 +1,28 @@
 <!-- public/index.html -->
 <!doctype html>
 <html lang="fr">
-  <head>
-    <meta charset="utf-8" />
-    <meta http-equiv="refresh" content="0; url=/api/" />
-    <title>Redirection…</title>
-    <script>location.replace("/api/");</script>
-  </head>
-  <body>Redirection…</body>
+<head>
+  <meta charset="utf-8" />
+  <meta http-equiv="refresh" content="0; url=/api/" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Redirection...</title>
+  <script>
+    window.location.replace("/api/");
+  </script>
+  <style>
+    body {
+      background: #0b0d12;
+      color: #fff;
+      font-family: sans-serif;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      height: 100vh;
+      margin: 0;
+    }
+  </style>
+</head>
+<body>
+  <p>Redirection en cours vers <b>/api/</b>...</p>
+</body>
 </html>
