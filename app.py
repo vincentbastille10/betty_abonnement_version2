@@ -703,6 +703,7 @@ def bettybot_reply():
         response_text or "",
         flags=re.DOTALL | re.IGNORECASE
     ).strip()
+        response_text = enforce_single_question(response_text)
 
     # buyer_email resolution
     buyer_email_ctx = (
