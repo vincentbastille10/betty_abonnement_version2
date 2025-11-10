@@ -327,14 +327,6 @@ def extract_lead_json(text: str):
         # on retire TOUTES les balises, où qu’elles soient
         text = LEAD_TAG_RE.sub("", text)
     return text.strip(), lead
-response_text, lead = extract_lead_json(full_text)
-response_text = re.sub(
-    r"<\s*LEAD_?JSON\s*>.*?</\s*LEAD_?JSON\s*>",
-    "",
-    response_text or "",
-    flags=re.DOTALL | re.IGNORECASE
-).strip()
-
 
 def _lead_from_history(history: list) -> dict:
     user_text = " ".join([m["content"] for m in history if m.get("role") == "user"]) or ""
@@ -704,6 +696,13 @@ def bettybot_reply():
         key = f"conv_{public_id or bot_key}"
         history = session.get(key, [])
     history = history[-6:]
+    response_text, lead = extract_lead_json(full_text)
+    response_text = re.sub(
+        r"<\s*LEAD_?JSON\s*>.*?</\s*LEAD_?JSON\s*>",
+        "",
+        response_text or "",
+        flags=re.DOTALL | re.IGNORECASE
+    ).strip()
 
     # buyer_email resolution
     buyer_email_ctx = (
