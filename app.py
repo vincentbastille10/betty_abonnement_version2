@@ -304,24 +304,37 @@ def call_llm_with_history(system_prompt: str, history: list, user_input: str) ->
     print("[LLM][Together][FAIL]", last_err_text or "unknown")
     return ""
 
-# parsing lead json
+# Remplace TOUTE la définition existante par ceci
 LEAD_TAG_RE = re.compile(
-    r"`?\s*<\s*LEAD_?JSON\s*>\s*(\{.*?\})\s*<\s*/\s*LEAD_?JSON\s*>\s*`?\s*$",
-    re.DOTALL | re.IGNORECASE
+    r"<\s*LEAD_?JSON\s*>\s*(\{.*?\})\s*</\s*LEAD_?JSON\s*>",
+    re.IGNORECASE | re.DOTALL
 )
+
 def extract_lead_json(text: str):
+    """Renvoie (message_sans_balises, lead_dict_ou_None).
+    Prend la DERNIÈRE balise <LEAD_JSON>... rencontrée dans le texte."""
     if not text:
         return text, None
-    m = LEAD_TAG_RE.search(text)
-    if not m:
-        return text, None
-    lead_raw = m.group(1).strip()
-    message = text[:m.start()].rstrip()
-    try:
-        lead = json.loads(lead_raw)
-    except Exception:
-        lead = None
-    return message, lead
+    matches = list(LEAD_TAG_RE.finditer(text))
+    lead = None
+    if matches:
+        m = matches[-1]  # on prend la dernière occurrence
+        lead_raw = (m.group(1) or "").strip()
+        try:
+            lead = json.loads(lead_raw)
+        except Exception:
+            lead = None
+        # on retire TOUTES les balises, où qu’elles soient
+        text = LEAD_TAG_RE.sub("", text)
+    return text.strip(), lead
+response_text, lead = extract_lead_json(full_text)
+response_text = re.sub(
+    r"<\s*LEAD_?JSON\s*>.*?</\s*LEAD_?JSON\s*>",
+    "",
+    response_text or "",
+    flags=re.DOTALL | re.IGNORECASE
+).strip()
+
 
 def _lead_from_history(history: list) -> dict:
     user_text = " ".join([m["content"] for m in history if m.get("role") == "user"]) or ""
