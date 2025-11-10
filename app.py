@@ -791,23 +791,42 @@ def bettybot_reply():
         bot_key = "avocat-001"
         bot = BOTS[bot_key]
 
-    # Historique
+    # Historique (6 derniers messages)
     if conv_id:
         history = CONVS.get(conv_id, [])
     else:
         key = f"conv_{public_id or bot_key}"
         history = session.get(key, [])
     history = history[-6:]
-    # --- APPEL LLM ---
+
+    # Prompt système (doit être défini AVANT l'appel LLM)
+    demo_mode = (public_id == "spectra-demo")
+    if demo_mode:
+        system_prompt = (
+            "Tu es **Betty Bot**, la démo officielle de Spectra Media. "
+            "Ta mission : montrer comment un bot métier peut capter, qualifier et transformer des visiteurs en clients. "
+            "Ton ton est chaleureux, clair et professionnel. 1 à 2 phrases maximum par message, une seule question à la fois. "
+            "Ne donne jamais de JSON visible. Quand tu as nom + téléphone + e-mail, écris : "
+            "« Parfait, je transmets vos coordonnées. Vous serez rappelé rapidement. » "
+            "Ajoute une question de qualification si nécessaire."
+        )
+    else:
+        system_prompt = build_system_prompt(
+            bot.get("pack", "avocat"),
+            bot.get("profile", {}),
+            bot.get("greeting", "")
+        )
+
+    # Appel LLM
     llm_text = call_llm_with_history(system_prompt=system_prompt, history=history, user_input=user_input)
     if not llm_text:
-        # fallback minimal si LLM muet
+        # Fallback si le LLM ne renvoie rien
         llm_text = rule_based_next_question(bot.get("pack",""), history + [{"role":"user","content": user_input}])
 
-    # --- GARDE-FOUS & SÉQUENCE DÉTERMINISTE ---
+    # Garde-fous (séquence RDV -> nom -> email -> téléphone + consentement)
     response_text, lead, should_send_now, stage = guardrailed_reply(history, user_input, llm_text, bot.get("pack",""))
 
-    # --- HISTORIQUE ---
+    # Persistance de l'historique
     history.append({"role": "user", "content": user_input})
     history.append({"role": "assistant", "content": response_text})
     if conv_id:
@@ -815,18 +834,18 @@ def bettybot_reply():
     else:
         session[f"conv_{public_id or bot_key}"] = history
 
-    # --- RÉSOLUTION EMAIL DESTINATAIRE ---
+    # Résolution de l'adresse de destination
     buyer_email_ctx = (
         (payload.get("buyer_email") or "").strip()
         or ((db_get_bot(public_id) or {}).get("buyer_email") if public_id else "")
         or (bot or {}).get("buyer_email")
         or os.getenv("DEFAULT_LEAD_EMAIL", "").strip()
     )
+    # app.logger.info(f"[DBG] buyer_email={buyer_email_ctx!r} pid='{public_id}'")
 
-    # --- ENVOI EMAIL (COMPLET OU PARTIEL AVEC CONSENTEMENT) ---
-    # Condition d'envoi:
-    # 1) ready (nom+email+téléphone), ou
-    # 2) consentement explicite (should_send_now True) même si incomplet mais avec au moins 1 info utile.
+    # Envoi mail :
+    # - stage ready (nom+email+téléphone)
+    # - ou consentement explicite (should_send_now) avec au moins 1 info utile
     have_any_info = any([lead.get("name"), lead.get("email"), lead.get("phone"), lead.get("reason")])
     may_send = (stage == "ready") or (should_send_now and have_any_info)
 
@@ -848,6 +867,7 @@ def bettybot_reply():
                     },
                     bot_name=(bot or {}).get("name") or "Betty Bot",
                 )
+                lead["stage"] = effective_stage  # <-- pour renvoyer un stage cohérent
                 app.logger.info(f"[LEAD] Email ({effective_stage}) envoyé à {buyer_email_ctx} pour bot {public_id}")
             except Exception as e:
                 app.logger.exception(f"[LEAD] Erreur envoi email -> {e}")
