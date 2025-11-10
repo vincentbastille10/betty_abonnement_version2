@@ -1,9 +1,8 @@
 {
-  "version": 3,
-  "functions": {
-    "api/index.py": { "runtime": "python3.11" }
-  },
-  "buildCommand": "pip install -r requirements.txt",
+  "version": 2,
+  "builds": [
+    { "src": "api/index.py", "use": "@vercel/python@3.1.6" }
+  ],
   "routes": [
     { "src": "/(.*)", "dest": "api/index.py" }
   ]
