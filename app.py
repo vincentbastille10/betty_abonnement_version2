@@ -1,4 +1,4 @@
-# app.py — version corrigée (structure saine, erreurs 500 éliminées)
+# app.py — version propre (Demo vs Acheté, LLM des deux côtés, garde-fous + e-mail)
 
 from __future__ import annotations
 
@@ -56,6 +56,9 @@ MJ_API_KEY    = os.getenv("MJ_API_KEY", "").strip()
 MJ_API_SECRET = os.getenv("MJ_API_SECRET", "").strip()
 MJ_FROM_EMAIL = os.getenv("MJ_FROM_EMAIL", "no-reply@spectramedia.online").strip()
 MJ_FROM_NAME  = os.getenv("MJ_FROM_NAME", "Spectra Media AI").strip()
+
+# ➕ Nouveaux env pour routage des leads en démo
+DEMO_LEAD_EMAIL = os.getenv("DEMO_LEAD_EMAIL", "").strip()
 
 app.jinja_env.globals["BASE_URL"] = BASE_URL
 
@@ -205,19 +208,6 @@ def parse_contact_info(raw: str) -> dict:
     address = m_addr.group(1).strip() if m_addr else ""
     return {"raw": raw, "name": name, "email": email, "phone": phone, "address": address, "hours": hours}
 
-def load_pack_prompt(pack_name: str) -> str:
-    path = f"data/packs/{pack_name}.yaml"
-    if not os.path.exists(path):
-        return (
-            "Tu es une assistante AI professionnelle. "
-            "Ta mission principale est de QUALIFIER la demande (motif, nom, email, téléphone, disponibilités) "
-            "et de proposer un rendez-vous avec le professionnel si pertinent. "
-            "Reste concise, polie, en français. Ne donne pas d'avis juridique/médical : oriente."
-        )
-    with open(path, "r") as f:
-        data = yaml.safe_load(f) or {}
-    return data.get("prompt", "Tu es une assistante AI professionnelle.")
-
 def build_business_block(profile: dict) -> str:
     if not profile:
         return ""
@@ -264,7 +254,6 @@ RAPPEL :
 """
     greet = f"\nMessage d'accueil recommandé : {greeting}\n" if greeting else ""
     return f"{base}\n{biz}\n{guide}\n{greet}"
-
 # ==== LLM ====
 def call_llm_with_history(system_prompt: str, history: list, user_input: str) -> str:
     if not TOGETHER_API_KEY:
@@ -346,84 +335,6 @@ def _lead_from_history(history: list) -> dict:
 
 # Limitation à 1 question / 2 phrases
 SENT_SPLIT_RE = re.compile(r"(?<=[\.\!\?])\s+")
-def guardrailed_reply(history: list, user_input: str, llm_text: str, pack: str) -> tuple[str, dict, bool, str]:
-    """
-    Retourne (response_text, lead_dict, should_send_now, stage)
-    - Forcer la 1re réplique utile (salut + question)
-    - Séquence déterministe : RDV -> nom -> email -> téléphone
-    - Si infos manquent, on propose quand même l'envoi (consentement)
-    - Envoi autorisé si:
-        * (nom+email+téléphone)  -> stage="ready"
-        * OU consentement explicite même si incomplet -> stage="partial"
-    """
-    # État courant
-    augmented_history = history + ([{"role":"user","content": user_input}] if user_input else [])
-    lead = _lead_from_history(augmented_history)
-
-    # 1) Premier tour : on impose ta phrase d’ouverture
-    if len(history) == 0:
-        msg = "Bonjour, qu’est-ce que je peux faire pour vous ?"
-        return enforce_single_question(msg), lead, False, "collecting"
-
-    # 2) Détecter intention RDV / consentement
-    text_window = (" ".join([m["content"] for m in augmented_history if m.get("role") in ("user","assistant")]) or "")
-    intent_rdv  = bool(INTENT_RDV_RE.search(text_window))
-    consent     = bool(CONSENT_RE.search(user_input or ""))
-
-    # 3) Si LLM a répondu trop vague, on remet la voie sur rails
-    response_text_llm, lead_tag = extract_lead_json(llm_text or "")
-    response_text_llm = re.sub(r"<\s*LEAD_?JSON\s*>.*?</\s*LEAD_?JSON\s*>", "", response_text_llm or "", flags=re.DOTALL|re.IGNORECASE).strip()
-    response_text_llm = response_text_llm or ""
-
-    # 4) Séquence déterministe si RDV détecté (ou si l’LLM n’a rien demandé d’utile)
-    must_take_control = intent_rdv or not response_text_llm or (len(response_text_llm) < 6)
-
-    if must_take_control:
-        # a) Demander le nom si absent
-        if not lead["name"]:
-            msg = "Très bien, je suis là pour vous aider. Pour commencer, quel est votre nom complet ?"
-            # Proposer l’envoi même si incomplet
-            msg2 = "Et si vous préférez, je peux déjà transmettre vos informations pour vous proposer un rendez-vous. D’accord ?"
-            return enforce_single_question(f"{msg} {msg2}"), lead, consent, "collecting"
-
-        # b) Demander l’email
-        if not lead["email"]:
-            msg = "Merci. Quelle est votre adresse e-mail ?"
-            msg2 = "Je peux aussi transmettre dès maintenant vos informations pour organiser un rendez-vous. D’accord ?"
-            return enforce_single_question(f"{msg} {msg2}"), lead, consent, "collecting"
-
-        # c) Demander le téléphone
-        if not lead["phone"]:
-            msg = "Et enfin, quel est votre numéro de téléphone ?"
-            msg2 = "Souhaitez-vous que je transmette vos informations pour vous proposer un rendez-vous ?"
-            return enforce_single_question(f"{msg} {msg2}"), lead, consent, "collecting"
-
-        # d) Tout est là
-        msg = "Parfait, je transmets vos coordonnées pour vous proposer un rendez-vous."
-        return enforce_single_question(msg), {**lead, "stage":"ready"}, True, "ready"
-
-    # 5) Sinon, on garde la réponse LLM mais on s’assure qu’il pose la bonne question
-    #    Si tout manque encore, on injecte la question suivante + consentement.
-    if not lead["name"]:
-        fallback_q = "Pour commencer, quel est votre nom complet ? Puis-je transmettre vos informations pour vous proposer un rendez-vous ?"
-        merged = (response_text_llm + " " + fallback_q).strip()
-        return enforce_single_question(merged), lead, consent, "collecting"
-
-    if not lead["email"]:
-        fallback_q = "Merci. Quelle est votre adresse e-mail ? Souhaitez-vous que je transmette vos informations pour un rendez-vous ?"
-        merged = (response_text_llm + " " + fallback_q).strip()
-        return enforce_single_question(merged), lead, consent, "collecting"
-
-    if not lead["phone"]:
-        fallback_q = "Quel est votre numéro de téléphone ? Je peux transmettre vos informations pour vous proposer un rendez-vous, d’accord ?"
-        merged = (response_text_llm + " " + fallback_q).strip()
-        return enforce_single_question(merged), lead, consent, "collecting"
-
-    # Déjà complet
-    ok_msg = "Parfait, je transmets vos coordonnées pour vous proposer un rendez-vous."
-    merged = (response_text_llm + " " + ok_msg).strip()
-    return enforce_single_question(merged), {**lead, "stage":"ready"}, True, "ready"
-
 def enforce_single_question(text: str, max_sentences: int = 2) -> str:
     if not text:
         return text
@@ -435,9 +346,67 @@ def enforce_single_question(text: str, max_sentences: int = 2) -> str:
     text = " ".join(sentences[:max_sentences])
     text = re.sub(r"\s+", " ", text).strip()
     return text
+
 # ==== Intent & consentement ====
 INTENT_RDV_RE = re.compile(r"\b(rendez[- ]?vous|rdv|prise? (de )?rendez[- ]?vous|prendre un rdv|booking|appointment)\b", re.I)
 CONSENT_RE    = re.compile(r"\b(oui|ok|okay|yes|si|d['’ ]?accord|vas[- ]?y|go|let.?s go|ça marche|ca marche)\b", re.I)
+
+def guardrailed_reply(history: list, user_input: str, llm_text: str, pack: str) -> tuple[str, dict, bool, str]:
+    """
+    Retourne (response_text, lead_dict, should_send_now, stage)
+    - 1re réplique imposée
+    - Séquence déterministe : nom -> email -> téléphone (+ consentement à transmettre)
+    - Envoi autorisé si stage=ready OU consentement explicite avec au moins 1 info utile
+    """
+    augmented_history = history + ([{"role":"user","content": user_input}] if user_input else [])
+    lead = _lead_from_history(augmented_history)
+
+    # 1) Premier tour : ouverture imposée
+    if len(history) == 0:
+        msg = "Bonjour, qu’est-ce que je peux faire pour vous ?"
+        return enforce_single_question(msg), lead, False, "collecting"
+
+    # 2) Détection d'intent & consentement
+    text_window = (" ".join([m["content"] for m in augmented_history if m.get("role") in ("user","assistant")]) or "")
+    intent_rdv  = bool(INTENT_RDV_RE.search(text_window))
+    consent     = bool(CONSENT_RE.search(user_input or ""))
+
+    # 3) Nettoyage du texte LLM
+    response_text_llm, _ = extract_lead_json(llm_text or "")
+    response_text_llm = re.sub(r"<\s*LEAD_?JSON\s*>.*?</\s*LEAD_?JSON\s*>", "", response_text_llm or "", flags=re.DOTALL|re.IGNORECASE).strip()
+
+    # 4) On reprend la main si LLM vague ou RDV détecté
+    must_take_control = intent_rdv or not response_text_llm or (len(response_text_llm) < 6)
+
+    if must_take_control:
+        if not lead["name"]:
+            msg = "Très bien, je suis là pour vous aider. Pour commencer, quel est votre nom complet ?"
+            msg2 = "Je peux aussi transmettre vos informations pour vous proposer un rendez-vous. D’accord ?"
+            return enforce_single_question(f"{msg} {msg2}"), lead, consent, "collecting"
+        if not lead["email"]:
+            msg = "Merci. Quelle est votre adresse e-mail ?"
+            msg2 = "Souhaitez-vous que je transmette vos informations pour organiser un rendez-vous ?"
+            return enforce_single_question(f"{msg} {msg2}"), lead, consent, "collecting"
+        if not lead["phone"]:
+            msg = "Et enfin, quel est votre numéro de téléphone ?"
+            msg2 = "Je peux transmettre vos informations pour un rendez-vous, d’accord ?"
+            return enforce_single_question(f"{msg} {msg2}"), lead, consent, "collecting"
+        msg = "Parfait, je transmets vos coordonnées pour vous proposer un rendez-vous."
+        return enforce_single_question(msg), {**lead, "stage":"ready"}, True, "ready"
+
+    # 5) Sinon on garde la réponse LLM mais on injecte la question utile suivante
+    if not lead["name"]:
+        q = "Pour commencer, quel est votre nom complet ? Puis-je transmettre vos informations pour vous proposer un rendez-vous ?"
+        return enforce_single_question(f"{response_text_llm} {q}".strip()), lead, consent, "collecting"
+    if not lead["email"]:
+        q = "Merci. Quelle est votre adresse e-mail ? Souhaitez-vous que je transmette vos informations pour un rendez-vous ?"
+        return enforce_single_question(f"{response_text_llm} {q}".strip()), lead, consent, "collecting"
+    if not lead["phone"]:
+        q = "Quel est votre numéro de téléphone ? Je peux transmettre vos informations pour vous proposer un rendez-vous, d’accord ?"
+        return enforce_single_question(f"{response_text_llm} {q}".strip()), lead, consent, "collecting"
+
+    ok = "Parfait, je transmets vos coordonnées pour vous proposer un rendez-vous."
+    return enforce_single_question(f"{response_text_llm} {ok}".strip()), {**lead, "stage":"ready"}, True, "ready"
 
 def rule_based_next_question(pack: str, history: list) -> str:
     lead = _lead_from_history(history)
@@ -700,7 +669,7 @@ def recap_page():
     cfg = {
         "pack":        bot.get("pack") or pack,
         "color":       bot.get("color") or "#4F46E5",
-        "greeting":    bot.get("greeting") or "Bonjour, je suis Betty. Comment puis-je vous aider ?",
+        "greeting":    bot.get("greeting") or "Bonjour, qu’est-ce que je peux faire pour vous ?",
         "contact":     (bot.get("profile") or {}).get("raw") or "",
         "px":          request.args.get("px") if request.args.get("px") is not None else "0.5",
         "py":          request.args.get("py") if request.args.get("py") is not None else "0.5",
@@ -740,7 +709,7 @@ def chat_page():
             "name": base["name"],
             "color": base["color"],
             "avatar_file": base["avatar_file"],
-            "greeting": "Bonjour, je suis Betty. Comment puis-je vous aider ?",
+            "greeting": "Bonjour, qu’est-ce que je peux faire pour vous ?",
             "owner_name": "Client",
             "profile": {},
             "pack": base["pack"]
@@ -768,8 +737,8 @@ def chat_page():
             header_title="Betty Bot, votre assistante AI",
             color=bot.get("color") or "#4F46E5",
             avatar_url=static_url(bot.get("avatar_file") or "avocat.jpg"),
-            greeting=bot.get("greeting") or "Bonjour, je suis Betty. Comment puis-je vous aider ?",
-            buyer_email=buyer_email,
+            greeting=bot.get("greeting") or "Bonjour, qu’est-ce que je peux faire pour vous ?",
+            buyer_email=buyer_email,  # passage pour back uniquement, ne pas afficher côté front
             embed=embed
         )
     except TemplateNotFound:
@@ -799,31 +768,29 @@ def bettybot_reply():
         history = session.get(key, [])
     history = history[-6:]
 
-    # Prompt système (doit être défini AVANT l'appel LLM)
+    # Choix du prompt : Demo vs Acheté
     demo_mode = (public_id == "spectra-demo")
     if demo_mode:
         system_prompt = (
             "Tu es **Betty Bot**, la démo officielle de Spectra Media. "
-            "Ta mission : montrer comment un bot métier peut capter, qualifier et transformer des visiteurs en clients. "
-            "Ton ton est chaleureux, clair et professionnel. 1 à 2 phrases maximum par message, une seule question à la fois. "
-            "Ne donne jamais de JSON visible. Quand tu as nom + téléphone + e-mail, écris : "
-            "« Parfait, je transmets vos coordonnées. Vous serez rappelé rapidement. » "
-            "Ajoute une question de qualification si nécessaire."
+            "Objectif : présenter le concept de « bot métier » (acquisition, qualification, RDV) et collecter les coordonnées. "
+            "Ton ton est chaleureux, clair et professionnel. 1 à 2 phrases max, une seule question à la fois. "
+            "Ne montre jamais de JSON. Mets en avant que l’utilisateur peut obtenir SON propre Betty métier et le code d’intégration en 2 minutes. "
+            "Quand tu as nom + téléphone + e-mail, écris : « Parfait, je transmets vos coordonnées à l’équipe Spectra Media. Vous serez rappelé rapidement. »"
         )
     else:
         system_prompt = build_system_prompt(
             bot.get("pack", "avocat"),
             bot.get("profile", {}),
-            bot.get("greeting", "")
+            bot.get("greeting", "") or "Bonjour, qu’est-ce que je peux faire pour vous ?"
         )
 
-    # Appel LLM
+    # Appel LLM (réponse brute potentiellement enrichie par garde-fous)
     llm_text = call_llm_with_history(system_prompt=system_prompt, history=history, user_input=user_input)
     if not llm_text:
-        # Fallback si le LLM ne renvoie rien
         llm_text = rule_based_next_question(bot.get("pack",""), history + [{"role":"user","content": user_input}])
 
-    # Garde-fous (séquence RDV -> nom -> email -> téléphone + consentement)
+    # Garde-fous (séquence RDV + consentement)
     response_text, lead, should_send_now, stage = guardrailed_reply(history, user_input, llm_text, bot.get("pack",""))
 
     # Persistance de l'historique
@@ -835,17 +802,20 @@ def bettybot_reply():
         session[f"conv_{public_id or bot_key}"] = history
 
     # Résolution de l'adresse de destination
-    buyer_email_ctx = (
-        (payload.get("buyer_email") or "").strip()
-        or ((db_get_bot(public_id) or {}).get("buyer_email") if public_id else "")
-        or (bot or {}).get("buyer_email")
-        or os.getenv("DEFAULT_LEAD_EMAIL", "").strip()
-    )
-    # app.logger.info(f"[DBG] buyer_email={buyer_email_ctx!r} pid='{public_id}'")
+    # - Démo : DEMO_LEAD_EMAIL -> DEFAULT_LEAD_EMAIL -> MJ_FROM_EMAIL
+    # - Acheté : email stocké (buyer_email), sinon DEFAULT/MJ_FROM_EMAIL
+    default_fallback = os.getenv("DEFAULT_LEAD_EMAIL", "").strip() or MJ_FROM_EMAIL
+    if demo_mode:
+        buyer_email_ctx = (DEMO_LEAD_EMAIL or default_fallback)
+    else:
+        buyer_email_ctx = (
+            (payload.get("buyer_email") or "").strip()
+            or ((db_get_bot(public_id) or {}).get("buyer_email") if public_id else "")
+            or (bot or {}).get("buyer_email")
+            or default_fallback
+        )
 
-    # Envoi mail :
-    # - stage ready (nom+email+téléphone)
-    # - ou consentement explicite (should_send_now) avec au moins 1 info utile
+    # Conditions d'envoi mail
     have_any_info = any([lead.get("name"), lead.get("email"), lead.get("phone"), lead.get("reason")])
     may_send = (stage == "ready") or (should_send_now and have_any_info)
 
@@ -865,117 +835,16 @@ def bettybot_reply():
                         "availability": lead.get("availability", ""),
                         "stage": effective_stage,
                     },
-                    bot_name=(bot or {}).get("name") or "Betty Bot",
+                    bot_name=(bot or {}).get("name") or ("Betty Bot (Démo)" if demo_mode else "Betty Bot"),
                 )
-                lead["stage"] = effective_stage  # <-- pour renvoyer un stage cohérent
-                app.logger.info(f"[LEAD] Email ({effective_stage}) envoyé à {buyer_email_ctx} pour bot {public_id}")
+                lead["stage"] = effective_stage
+                app.logger.info(f"[LEAD] Email ({effective_stage}) envoyé à {buyer_email_ctx} pour bot {public_id or ('demo' if demo_mode else 'N/A')}")
             except Exception as e:
                 app.logger.exception(f"[LEAD] Erreur envoi email -> {e}")
 
     return jsonify({
         "response": response_text,
         "stage": lead.get("stage") if isinstance(lead, dict) else None
-    })
-
-    # Prompt système
-    demo_mode = (public_id == "spectra-demo")
-    if demo_mode:
-        system_prompt = (
-            "Tu es **Betty Bot**, la démo officielle de Spectra Media. "
-            "Ta mission : montrer comment un bot métier peut capter, qualifier et transformer des visiteurs en clients. "
-            "Ton ton est chaleureux, clair et professionnel. 1 à 2 phrases maximum par message, une seule question à la fois.\n\n"
-            "Ta logique de conversation :\n"
-            "1. Accueillir et expliquer en une phrase ce qu’est un bot métier.\n"
-            "2. Mettre en avant ses avantages :\n"
-            "   - Capte les prospects 24h/24, même quand le bureau est fermé.\n"
-            "   - Qualifie automatiquement les demandes (nom, téléphone, email, besoin).\n"
-            "   - Fait gagner du temps et des clients.\n"
-            "   - S’intègre facilement sur un site, en moins de 2 minutes.\n"
-            "3. Susciter l’intérêt : pose des questions pour comprendre le métier ou le besoin du visiteur.\n"
-            "4. Collecter rapidement les coordonnées (téléphone, nom complet, email).\n"
-            "5. Quand tu as ces trois infos, écris exactement :\n"
-            "   « Parfait, je transmets vos coordonnées à l’équipe Spectra Media. Vous serez rappelé rapidement. »\n"
-            "6. Ensuite propose : « Voulez-vous recevoir une démo personnalisée ou le code d’intégration pour votre site ? »\n\n"
-            "⚙️ Règles obligatoires :\n"
-            "- N’affiche jamais de JSON ou de variables.\n"
-            "- Ne donne jamais d’avis juridique, médical ou technique.\n"
-            "- Ne t’éloigne pas du sujet “bot métier / acquisition / automatisation”.\n"
-            "- Ne fais jamais de phrases trop longues.\n\n"
-            "BALISE TECHNIQUE (dernière ligne, UNE SEULE LIGNE, sans markdown) :\n"
-            "<LEAD_JSON>{\"reason\":\"\", \"name\":\"\", \"email\":\"\", \"phone\":\"\", \"availability\":\"\", \"stage\":\"collecting|ready\"}</LEAD_JSON>\n\n"
-            "Rappel : passe le champ \"stage\" à \"ready\" UNIQUEMENT quand téléphone + nom complet + email sont présents."
-        )
-    else:
-        system_prompt = build_system_prompt(
-            bot.get("pack", "avocat"),
-            bot.get("profile", {}),
-            bot.get("greeting", "")
-        )
-
-    # Appel LLM (ou fallback règles)
-    full_text = call_llm_with_history(system_prompt=system_prompt, history=history, user_input=user_input)
-    if not full_text:
-        full_text = rule_based_next_question(bot.get("pack",""), history + [{"role":"user","content": user_input}])
-
-    # Extraction + nettoyage des balises LEAD_JSON
-    response_text, lead = extract_lead_json(full_text)
-    response_text = re.sub(
-        r"<\s*LEAD_?JSON\s*>.*?</\s*LEAD_?JSON\s*>",
-        "",
-        response_text or "",
-        flags=re.DOTALL | re.IGNORECASE
-    ).strip()
-
-    # 1 seule question / 2 phrases max
-    response_text = enforce_single_question(response_text)
-
-    # Persistance d’historique
-    history.append({"role": "user", "content": user_input})
-    history.append({"role": "assistant", "content": response_text})
-    if conv_id:
-        CONVS[conv_id] = history
-    else:
-        session[f"conv_{public_id or bot_key}"] = history
-
-    # Résolution email destinataire
-    buyer_email_ctx = (
-        (payload.get("buyer_email") or "").strip()
-        or ((db_get_bot(public_id) or {}).get("buyer_email") if public_id else "")
-        or (bot or {}).get("buyer_email")
-        or os.getenv("DEFAULT_LEAD_EMAIL", "").strip()
-    )
-    app.logger.info(f"[DBG] buyer_email={buyer_email_ctx!r} pid='{public_id}'")
-
-    # Envoi email si lead complet
-    if True:
-        if not lead or not isinstance(lead, dict):
-            lead = _lead_from_history(history + [{"role": "user", "content": user_input}])
-
-        stage_ok = bool(lead.get("phone")) and bool(lead.get("name")) and bool(lead.get("email"))
-        if stage_ok:
-            if not buyer_email_ctx:
-                app.logger.warning(f"[LEAD] buyer_email introuvable pour bot_id={public_id or 'N/A'} ; email non envoyé.")
-            else:
-                try:
-                    send_lead_email(
-                        to_email=buyer_email_ctx,
-                        lead={
-                            "reason": lead.get("reason", ""),
-                            "name": lead.get("name", ""),
-                            "email": lead.get("email", ""),
-                            "phone": lead.get("phone", ""),
-                            "availability": lead.get("availability", ""),
-                            "stage": "ready",
-                        },
-                        bot_name=(bot or {}).get("name") or "Betty Bot",
-                    )
-                    app.logger.info(f"[LEAD] Email envoyé à {buyer_email_ctx} pour bot {public_id}")
-                except Exception as e:
-                    app.logger.exception(f"[LEAD] Erreur envoi email -> {e}")
-
-    return jsonify({
-        "response": response_text,
-        "stage": (lead or {}).get("stage") if lead else None
     })
 
 # ==== Meta/API utilitaires ====
@@ -987,19 +856,19 @@ def embed_meta():
     _, bot = find_bot_by_public_id(public_id)
     if not bot:
         return jsonify({"error": "bot_not_found"}), 404
+    # IMPORTANT : on **n’expose pas** l’adresse acheteur ici
     return jsonify({
         "bot_id": public_id,
         "owner_name": bot.get("owner_name") or "Client",
         "display_name": bot.get("name") or "Betty Bot",
         "color_hex": bot.get("color") or "#4F46E5",
         "avatar_url": static_url(bot.get("avatar_file") or "avocat.jpg"),
-        "greeting": bot.get("greeting") or "Bonjour, je suis Betty. Comment puis-je vous aider ?",
-        "buyer_email": bot.get("buyer_email") or ""
+        "greeting": bot.get("greeting") or "Bonjour, qu’est-ce que je peux faire pour vous ?"
     })
 
 @app.route("/api/bot_meta")
 def bot_meta():
-    bot_id = (request.args.get("bot_id") or request.args.get("public_id") or "").strip()
+    bot_id = (request.args.get("bot_id") or request_args.get("public_id") or "").strip() if False else (request.args.get("bot_id") or request.args.get("public_id") or "").strip()
     if bot_id == "spectra-demo":
         b = BOTS["spectra-demo"]
         return jsonify({
@@ -1019,7 +888,7 @@ def bot_meta():
             "name": b.get("name") or "Betty Bot",
             "color_hex": b.get("color") or "#4F46E5",
             "avatar_url": static_url(b.get("avatar_file") or "avocat.jpg"),
-            "greeting": demo_greetings.get(bot_id, "Bonjour, je suis Betty. Comment puis-je vous aider ?")
+            "greeting": demo_greetings.get(bot_id, "Bonjour, qu’est-ce que je peux faire pour vous ?")
         })
     _, bot = find_bot_by_public_id(bot_id)
     if not bot:
@@ -1028,7 +897,7 @@ def bot_meta():
         "name": bot.get("name") or "Betty Bot",
         "color_hex": bot.get("color") or "#4F46E5",
         "avatar_url": static_url(bot.get("avatar_file") or "avocat.jpg"),
-        "greeting": bot.get("greeting") or "Bonjour, je suis Betty. Comment puis-je vous aider ?"
+        "greeting": bot.get("greeting") or "Bonjour, qu’est-ce que je peux faire pour vous ?"
     })
 
 @app.route("/healthz")
@@ -1073,3 +942,114 @@ def avatar(slug: str):
 # ==== Main ====
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000, debug=True)
+
+
+                    },
+                    bot_name=(bot or {}).get("name") or ("Betty Bot (Démo)" if demo_mode else "Betty Bot"),
+                )
+                lead["stage"] = effective_stage
+                app.logger.info(f"[LEAD] Email ({effective_stage}) envoyé à {buyer_email_ctx} pour bot {public_id or ('demo' if demo_mode else 'N/A')}")
+            except Exception as e:
+                app.logger.exception(f"[LEAD] Erreur envoi email -> {e}")
+
+    return jsonify({
+        "response": response_text,
+        "stage": lead.get("stage") if isinstance(lead, dict) else None
+    })
+
+# ==== Meta/API utilitaires ====
+@app.route("/api/embed_meta")
+def embed_meta():
+    public_id = (request.args.get("public_id") or "").strip()
+    if not public_id:
+        return jsonify({"error": "missing public_id"}), 400
+    _, bot = find_bot_by_public_id(public_id)
+    if not bot:
+        return jsonify({"error": "bot_not_found"}), 404
+    # IMPORTANT : on **n’expose pas** l’adresse acheteur ici
+    return jsonify({
+        "bot_id": public_id,
+        "owner_name": bot.get("owner_name") or "Client",
+        "display_name": bot.get("name") or "Betty Bot",
+        "color_hex": bot.get("color") or "#4F46E5",
+        "avatar_url": static_url(bot.get("avatar_file") or "avocat.jpg"),
+        "greeting": bot.get("greeting") or "Bonjour, qu’est-ce que je peux faire pour vous ?"
+    })
+
+@app.route("/api/bot_meta")
+def bot_meta():
+    bot_id = (request.args.get("bot_id") or request_args.get("public_id") or "").strip() if False else (request.args.get("bot_id") or request.args.get("public_id") or "").strip()
+    if bot_id == "spectra-demo":
+        b = BOTS["spectra-demo"]
+        return jsonify({
+            "name": "Betty Bot (Spectra Media)",
+            "color_hex": b.get("color") or "#4F46E5",
+            "avatar_url": static_url(b.get("avatar_file") or "avocat.jpg"),
+            "greeting": b.get("greeting") or "Bonjour et bienvenue chez Spectra Media. Souhaitez-vous créer votre Betty Bot métier ?"
+        })
+    if bot_id in BOTS:
+        b = BOTS[bot_id]
+        demo_greetings = {
+            "avocat-001":  "Bonjour et bienvenue au cabinet Werner & Werner. Que puis-je faire pour vous ?",
+            "immo-002":    "Bonjour et bienvenue à l’agence Werner Immobilier. Comment puis-je vous aider ?",
+            "medecin-003": "Bonjour et bienvenue au cabinet Werner Santé. Que puis-je faire pour vous ?",
+        }
+        return jsonify({
+            "name": b.get("name") or "Betty Bot",
+            "color_hex": b.get("color") or "#4F46E5",
+            "avatar_url": static_url(b.get("avatar_file") or "avocat.jpg"),
+            "greeting": demo_greetings.get(bot_id, "Bonjour, qu’est-ce que je peux faire pour vous ?")
+        })
+    _, bot = find_bot_by_public_id(bot_id)
+    if not bot:
+        return jsonify({"error": "bot_not_found"}), 404
+    return jsonify({
+        "name": bot.get("name") or "Betty Bot",
+        "color_hex": bot.get("color") or "#4F46E5",
+        "avatar_url": static_url(bot.get("avatar_file") or "avocat.jpg"),
+        "greeting": bot.get("greeting") or "Bonjour, qu’est-ce que je peux faire pour vous ?"
+    })
+
+@app.route("/healthz")
+def healthz():
+    return "ok", 200
+
+@app.route("/api/reset", methods=["POST"])
+def reset_conv():
+    key = (request.get_json(silent=True) or {}).get("key")
+    if key and key in CONVS:
+        CONVS.pop(key, None)
+    return jsonify({"ok": True})
+
+@app.route("/api/test_mailjet")
+def test_mailjet():
+    to = (request.args.get("to") or os.getenv("TEST_TO_EMAIL") or "").strip()
+    if not to:
+        return jsonify({"ok": False, "error": "missing 'to' param"}), 400
+    lead = {
+        "reason": "Test automatique",
+        "name": "Lead Test",
+        "email": "lead@example.com",
+        "phone": "+33000000000",
+        "availability": "demain 10h",
+        "stage": "ready",
+    }
+    send_lead_email(to, lead, bot_name="Betty Bot (test)")
+    return jsonify({"ok": True, "to": to})
+
+@app.route("/avatar/<slug>")
+def avatar(slug: str):
+    static_dir = os.path.join(app.root_path, "static")
+    filename = f"logo-{slug}.jpg"
+    path = os.path.join(static_dir, filename)
+    if os.path.exists(path):
+        return send_from_directory(static_dir, filename)
+    transparent_png = base64.b64decode(
+        "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+Xad8AAAAASUVORK5CYII="
+    )
+    return Response(transparent_png, mimetype="image/png")
+
+# ==== Main ====
+if __name__ == "__main__":
+    app.run(host="0.0.0.0", port=5000, debug=True)
+
