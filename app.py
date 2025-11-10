@@ -36,7 +36,7 @@ app = Flask(__name__)
 app.secret_key = os.getenv("FLASK_SECRET_KEY", "dev-secret-change-me")
 
 # ---- Route de test (peut être retirée après validation du déploiement) ----
-@app.get("/")
+@app.get("/api")
 def health():
     return "OK Betty via /api"
 
