@@ -305,7 +305,10 @@ def call_llm_with_history(system_prompt: str, history: list, user_input: str) ->
     return ""
 
 # parsing lead json
-LEAD_TAG_RE = re.compile(r"`?\s*<LEAD_JSON>\s*(\{.*?\})\s*</LEAD_JSON>\s*`?\s*$", re.DOTALL)
+LEAD_TAG_RE = re.compile(
+    r"`?\s*<\s*LEAD_?JSON\s*>\s*(\{.*?\})\s*<\s*/\s*LEAD_?JSON\s*>\s*`?\s*$",
+    re.DOTALL | re.IGNORECASE
+)
 def extract_lead_json(text: str):
     if not text:
         return text, None
@@ -736,8 +739,12 @@ def bettybot_reply():
         full_text = rule_based_next_question(bot.get("pack",""), history + [{"role":"user","content": user_input}])
 
     response_text, lead = extract_lead_json(full_text)
-    response_text = re.sub(r"<LEAD_JSON>.*?</LEAD_JSON>\s*$", "", response_text or "", flags=re.DOTALL).rstrip()
-
+    response_text = re.sub(
+        r"<\s*LEAD_?JSON\s*>.*?<\s*/\s*LEAD_?JSON\s*>\s*$",
+        "",
+        response_text or "",
+        flags=re.DOTALL | re.IGNORECASE
+).rstrip()
     # update history
     history.append({"role": "user", "content": user_input})
     history.append({"role": "assistant", "content": response_text})
