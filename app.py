@@ -346,6 +346,84 @@ def _lead_from_history(history: list) -> dict:
 
 # Limitation à 1 question / 2 phrases
 SENT_SPLIT_RE = re.compile(r"(?<=[\.\!\?])\s+")
+def guardrailed_reply(history: list, user_input: str, llm_text: str, pack: str) -> tuple[str, dict, bool, str]:
+    """
+    Retourne (response_text, lead_dict, should_send_now, stage)
+    - Forcer la 1re réplique utile (salut + question)
+    - Séquence déterministe : RDV -> nom -> email -> téléphone
+    - Si infos manquent, on propose quand même l'envoi (consentement)
+    - Envoi autorisé si:
+        * (nom+email+téléphone)  -> stage="ready"
+        * OU consentement explicite même si incomplet -> stage="partial"
+    """
+    # État courant
+    augmented_history = history + ([{"role":"user","content": user_input}] if user_input else [])
+    lead = _lead_from_history(augmented_history)
+
+    # 1) Premier tour : on impose ta phrase d’ouverture
+    if len(history) == 0:
+        msg = "Bonjour, qu’est-ce que je peux faire pour vous ?"
+        return enforce_single_question(msg), lead, False, "collecting"
+
+    # 2) Détecter intention RDV / consentement
+    text_window = (" ".join([m["content"] for m in augmented_history if m.get("role") in ("user","assistant")]) or "")
+    intent_rdv  = bool(INTENT_RDV_RE.search(text_window))
+    consent     = bool(CONSENT_RE.search(user_input or ""))
+
+    # 3) Si LLM a répondu trop vague, on remet la voie sur rails
+    response_text_llm, lead_tag = extract_lead_json(llm_text or "")
+    response_text_llm = re.sub(r"<\s*LEAD_?JSON\s*>.*?</\s*LEAD_?JSON\s*>", "", response_text_llm or "", flags=re.DOTALL|re.IGNORECASE).strip()
+    response_text_llm = response_text_llm or ""
+
+    # 4) Séquence déterministe si RDV détecté (ou si l’LLM n’a rien demandé d’utile)
+    must_take_control = intent_rdv or not response_text_llm or (len(response_text_llm) < 6)
+
+    if must_take_control:
+        # a) Demander le nom si absent
+        if not lead["name"]:
+            msg = "Très bien, je suis là pour vous aider. Pour commencer, quel est votre nom complet ?"
+            # Proposer l’envoi même si incomplet
+            msg2 = "Et si vous préférez, je peux déjà transmettre vos informations pour vous proposer un rendez-vous. D’accord ?"
+            return enforce_single_question(f"{msg} {msg2}"), lead, consent, "collecting"
+
+        # b) Demander l’email
+        if not lead["email"]:
+            msg = "Merci. Quelle est votre adresse e-mail ?"
+            msg2 = "Je peux aussi transmettre dès maintenant vos informations pour organiser un rendez-vous. D’accord ?"
+            return enforce_single_question(f"{msg} {msg2}"), lead, consent, "collecting"
+
+        # c) Demander le téléphone
+        if not lead["phone"]:
+            msg = "Et enfin, quel est votre numéro de téléphone ?"
+            msg2 = "Souhaitez-vous que je transmette vos informations pour vous proposer un rendez-vous ?"
+            return enforce_single_question(f"{msg} {msg2}"), lead, consent, "collecting"
+
+        # d) Tout est là
+        msg = "Parfait, je transmets vos coordonnées pour vous proposer un rendez-vous."
+        return enforce_single_question(msg), {**lead, "stage":"ready"}, True, "ready"
+
+    # 5) Sinon, on garde la réponse LLM mais on s’assure qu’il pose la bonne question
+    #    Si tout manque encore, on injecte la question suivante + consentement.
+    if not lead["name"]:
+        fallback_q = "Pour commencer, quel est votre nom complet ? Puis-je transmettre vos informations pour vous proposer un rendez-vous ?"
+        merged = (response_text_llm + " " + fallback_q).strip()
+        return enforce_single_question(merged), lead, consent, "collecting"
+
+    if not lead["email"]:
+        fallback_q = "Merci. Quelle est votre adresse e-mail ? Souhaitez-vous que je transmette vos informations pour un rendez-vous ?"
+        merged = (response_text_llm + " " + fallback_q).strip()
+        return enforce_single_question(merged), lead, consent, "collecting"
+
+    if not lead["phone"]:
+        fallback_q = "Quel est votre numéro de téléphone ? Je peux transmettre vos informations pour vous proposer un rendez-vous, d’accord ?"
+        merged = (response_text_llm + " " + fallback_q).strip()
+        return enforce_single_question(merged), lead, consent, "collecting"
+
+    # Déjà complet
+    ok_msg = "Parfait, je transmets vos coordonnées pour vous proposer un rendez-vous."
+    merged = (response_text_llm + " " + ok_msg).strip()
+    return enforce_single_question(merged), {**lead, "stage":"ready"}, True, "ready"
+
 def enforce_single_question(text: str, max_sentences: int = 2) -> str:
     if not text:
         return text
