@@ -1,7 +1,6 @@
 # app.py
 # Version robuste fournie par l'assistant — veille à garder tes env vars (MJ_API_KEY, MJ_API_SECRET, DB_PATH, STRIPE keys...)
 
-# app.py
 from __future__ import annotations
 
 # Standard library
@@ -16,6 +15,8 @@ import hashlib
 from pathlib import Path
 from contextlib import contextmanager
 from urllib.parse import urlencode
+import sys
+import traceback
 
 # Third-party
 from flask import (
@@ -26,18 +27,28 @@ import requests
 import stripe
 import yaml
 from jinja2 import TemplateNotFound
-import sys, traceback
+
+# --- Gestion propre des erreurs non interceptées ---
 sys.excepthook = lambda t, v, tb: traceback.print_exception(t, v, tb)
 
-
+# ==== APP FLASK PRINCIPALE ====
 app = Flask(__name__)
 app.secret_key = os.getenv("FLASK_SECRET_KEY", "dev-secret-change-me")
 
-# cookies / iframe
+# ---- Route de test (peut être retirée après validation du déploiement) ----
+@app.get("/")
+def health():
+    return "OK Betty via /api"
+
+# ---- Cookies et sécurité iframe ----
 SESSION_SECURE = os.getenv("SESSION_SECURE", "true").lower() == "true"
-app.config.update(SESSION_COOKIE_SAMESITE="None", SESSION_COOKIE_SECURE=SESSION_SECURE)
+app.config.update(
+    SESSION_COOKIE_SAMESITE="None",
+    SESSION_COOKIE_SECURE=SESSION_SECURE,
+)
 
 # CONFIG
+
 TOGETHER_API_KEY = os.getenv("TOGETHER_API_KEY", "").strip()
 TOGETHER_API_URL = "https://api.together.xyz/v1/chat/completions"
 LLM_MODEL = os.getenv("LLM_MODEL", "meta-llama/Meta-Llama-3.1-8B-Instruct-Turbo").strip()
