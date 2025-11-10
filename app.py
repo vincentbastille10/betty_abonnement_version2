@@ -798,6 +798,64 @@ def bettybot_reply():
         key = f"conv_{public_id or bot_key}"
         history = session.get(key, [])
     history = history[-6:]
+    # --- APPEL LLM ---
+    llm_text = call_llm_with_history(system_prompt=system_prompt, history=history, user_input=user_input)
+    if not llm_text:
+        # fallback minimal si LLM muet
+        llm_text = rule_based_next_question(bot.get("pack",""), history + [{"role":"user","content": user_input}])
+
+    # --- GARDE-FOUS & SÉQUENCE DÉTERMINISTE ---
+    response_text, lead, should_send_now, stage = guardrailed_reply(history, user_input, llm_text, bot.get("pack",""))
+
+    # --- HISTORIQUE ---
+    history.append({"role": "user", "content": user_input})
+    history.append({"role": "assistant", "content": response_text})
+    if conv_id:
+        CONVS[conv_id] = history
+    else:
+        session[f"conv_{public_id or bot_key}"] = history
+
+    # --- RÉSOLUTION EMAIL DESTINATAIRE ---
+    buyer_email_ctx = (
+        (payload.get("buyer_email") or "").strip()
+        or ((db_get_bot(public_id) or {}).get("buyer_email") if public_id else "")
+        or (bot or {}).get("buyer_email")
+        or os.getenv("DEFAULT_LEAD_EMAIL", "").strip()
+    )
+
+    # --- ENVOI EMAIL (COMPLET OU PARTIEL AVEC CONSENTEMENT) ---
+    # Condition d'envoi:
+    # 1) ready (nom+email+téléphone), ou
+    # 2) consentement explicite (should_send_now True) même si incomplet mais avec au moins 1 info utile.
+    have_any_info = any([lead.get("name"), lead.get("email"), lead.get("phone"), lead.get("reason")])
+    may_send = (stage == "ready") or (should_send_now and have_any_info)
+
+    if may_send:
+        if not buyer_email_ctx:
+            app.logger.warning(f"[LEAD] buyer_email introuvable pour bot_id={public_id or 'N/A'} ; email non envoyé.")
+        else:
+            try:
+                effective_stage = "ready" if (lead.get("phone") and lead.get("name") and lead.get("email")) else "partial"
+                send_lead_email(
+                    to_email=buyer_email_ctx,
+                    lead={
+                        "reason": lead.get("reason", ""),
+                        "name": lead.get("name", ""),
+                        "email": lead.get("email", ""),
+                        "phone": lead.get("phone", ""),
+                        "availability": lead.get("availability", ""),
+                        "stage": effective_stage,
+                    },
+                    bot_name=(bot or {}).get("name") or "Betty Bot",
+                )
+                app.logger.info(f"[LEAD] Email ({effective_stage}) envoyé à {buyer_email_ctx} pour bot {public_id}")
+            except Exception as e:
+                app.logger.exception(f"[LEAD] Erreur envoi email -> {e}")
+
+    return jsonify({
+        "response": response_text,
+        "stage": lead.get("stage") if isinstance(lead, dict) else None
+    })
 
     # Prompt système
     demo_mode = (public_id == "spectra-demo")
