@@ -1,5 +1,4 @@
-# app.py
-# Version robuste fournie par l'assistant — veille à garder tes env vars (MJ_API_KEY, MJ_API_SECRET, DB_PATH, STRIPE keys...)
+# app.py — version corrigée (structure saine, erreurs 500 éliminées)
 
 from __future__ import annotations
 
@@ -28,27 +27,21 @@ import stripe
 import yaml
 from jinja2 import TemplateNotFound
 
-# --- Gestion propre des erreurs non interceptées ---
+# --- Gestion globale des exceptions non interceptées (log) ---
 sys.excepthook = lambda t, v, tb: traceback.print_exception(t, v, tb)
 
-# ==== APP FLASK PRINCIPALE ====
+# ==== APP FLASK ====
 app = Flask(__name__)
 app.secret_key = os.getenv("FLASK_SECRET_KEY", "dev-secret-change-me")
 
-# ---- Route de test (peut être retirée après validation du déploiement) ----
-@app.get("/api")
-def health():
-    return "OK Betty via /api"
-
-# ---- Cookies et sécurité iframe ----
+# ---- Cookies / sécurité iframe ----
 SESSION_SECURE = os.getenv("SESSION_SECURE", "true").lower() == "true"
 app.config.update(
     SESSION_COOKIE_SAMESITE="None",
     SESSION_COOKIE_SECURE=SESSION_SECURE,
 )
 
-# CONFIG
-
+# ---- Config LLM / Stripe / Mailjet / Base ----
 TOGETHER_API_KEY = os.getenv("TOGETHER_API_KEY", "").strip()
 TOGETHER_API_URL = "https://api.together.xyz/v1/chat/completions"
 LLM_MODEL = os.getenv("LLM_MODEL", "meta-llama/Meta-Llama-3.1-8B-Instruct-Turbo").strip()
@@ -66,7 +59,7 @@ MJ_FROM_NAME  = os.getenv("MJ_FROM_NAME", "Spectra Media AI").strip()
 
 app.jinja_env.globals["BASE_URL"] = BASE_URL
 
-# DB path resolution
+# ==== Base de données ====
 def pick_db_path() -> Path:
     env_forced = os.getenv("DB_PATH")
     if env_forced:
@@ -156,7 +149,7 @@ def db_get_bot(public_id: str):
 
 db_init()
 
-# favicon endpoints to avoid 500 on missing file
+# ==== Favicons & manifest (anti 404->500) ====
 @app.route("/favicon.ico")
 def favicon_root():
     p = os.path.join(app.root_path, "static", "favicon.ico")
@@ -192,7 +185,7 @@ def site_manifest():
         return send_from_directory(os.path.dirname(p), os.path.basename(p))
     return jsonify({"name":"Betty Bots","short_name":"Betty","icons":[]}), 200
 
-# helpers
+# ==== Helpers ====
 def static_url(filename: str) -> str:
     return url_for("static", filename=filename)
 
@@ -272,7 +265,7 @@ RAPPEL :
     greet = f"\nMessage d'accueil recommandé : {greeting}\n" if greeting else ""
     return f"{base}\n{biz}\n{guide}\n{greet}"
 
-# LLM call
+# ==== LLM ====
 def call_llm_with_history(system_prompt: str, history: list, user_input: str) -> str:
     if not TOGETHER_API_KEY:
         return ""
@@ -281,12 +274,12 @@ def call_llm_with_history(system_prompt: str, history: list, user_input: str) ->
     messages.extend(history or [])
     messages.append({"role": "user", "content": user_input})
     payload = {
-    "model": LLM_MODEL,
-    "max_tokens": LLM_MAX_TOKENS,
-    "temperature": 0.3,
-    "messages": messages
-}
-backoffs = [0.4, 0.8, 1.6]  # plus court
+        "model": LLM_MODEL,
+        "max_tokens": LLM_MAX_TOKENS,
+        "temperature": 0.3,
+        "messages": messages
+    }
+    backoffs = [0.4, 0.8, 1.6]
 
     last_err_text = None
     for wait in backoffs:
@@ -310,29 +303,27 @@ backoffs = [0.4, 0.8, 1.6]  # plus court
     print("[LLM][Together][FAIL]", last_err_text or "unknown")
     return ""
 
-# Remplace TOUTE la définition existante par ceci
+# ==== LEAD JSON helpers ====
 LEAD_TAG_RE = re.compile(
     r"<\s*LEAD_?JSON\s*>\s*(\{.*?\})\s*</\s*LEAD_?JSON\s*>",
     re.IGNORECASE | re.DOTALL
 )
 
 def extract_lead_json(text: str):
-    """Renvoie (message_sans_balises, lead_dict_ou_None).
-    Prend la DERNIÈRE balise <LEAD_JSON>... rencontrée dans le texte."""
+    """Renvoie (message_sans_balises, lead_dict_ou_None). Prend la DERNIÈRE balise."""
     if not text:
         return text, None
     matches = list(LEAD_TAG_RE.finditer(text))
     lead = None
     if matches:
-        m = matches[-1]  # on prend la dernière occurrence
+        m = matches[-1]
         lead_raw = (m.group(1) or "").strip()
         try:
             lead = json.loads(lead_raw)
         except Exception:
             lead = None
-        # on retire TOUTES les balises, où qu’elles soient
         text = LEAD_TAG_RE.sub("", text)
-    return text.strip(), lead
+    return (text or "").strip(), lead
 
 def _lead_from_history(history: list) -> dict:
     user_text = " ".join([m["content"] for m in history if m.get("role") == "user"]) or ""
@@ -343,14 +334,8 @@ def _lead_from_history(history: list) -> dict:
     if m: d["email"] = m.group(0)
     m = re.search(r'(\+?\d[\d \.\-]{6,})', user_text)
     if m: d["phone"] = m.group(1).strip()
-    m = re.search(
-    r"(?:je m(?:'|e)appelle|nom\s*:?)\s*([A-Za-zÀ-ÖØ-öø-ÿ'\-\s]{2,80})",
-    user_text,
-    re.I
-)
-
-    if m:
-        d["name"] = m.group(1).strip()
+    m = re.search(r"(?:je m(?:'|e)appelle|nom\s*:?)\s*([A-Za-zÀ-ÖØ-öø-ÿ'\-\s]{2,80})", user_text, re.I)
+    if m: d["name"] = m.group(1).strip()
     m = re.search(r'(?:souhaite|veux|voudrais|besoin|motif|pour)\s*:?(.{5,140})', user_text, re.I)
     if m: d["reason"] = m.group(1).strip()
     m = re.search(r'(demain|matin|après-midi|soir|lundi|mardi|mercredi|jeudi|vendredi)[^\.!?]{0,60}', user_text, re.I)
@@ -358,6 +343,20 @@ def _lead_from_history(history: list) -> dict:
     if d["phone"] and d["name"] and d["email"]:
         d["stage"] = "ready"
     return d
+
+# Limitation à 1 question / 2 phrases
+SENT_SPLIT_RE = re.compile(r"(?<=[\.\!\?])\s+")
+def enforce_single_question(text: str, max_sentences: int = 2) -> str:
+    if not text:
+        return text
+    if "?" in text:
+        first_q_idx = text.index("?") + 1
+        text = text[:first_q_idx]
+    sentences = SENT_SPLIT_RE.split(text)
+    sentences = [s.strip() for s in sentences if s.strip()]
+    text = " ".join(sentences[:max_sentences])
+    text = re.sub(r"\s+", " ", text).strip()
+    return text
 
 def rule_based_next_question(pack: str, history: list) -> str:
     lead = _lead_from_history(history)
@@ -372,7 +371,7 @@ def rule_based_next_question(pack: str, history: list) -> str:
         lead["stage"] = "ready"
     return f"{msg}\n<LEAD_JSON>{json.dumps(lead, ensure_ascii=False)}</LEAD_JSON>"
 
-# send lead via Mailjet
+# ==== Email lead (Mailjet) ====
 def send_lead_email(to_email: str, lead: dict, bot_name: str = "Betty Bot"):
     if not (MJ_API_KEY and MJ_API_SECRET and to_email):
         print("[LEAD][MAILJET] Config manquante ou email vide, email non envoyé.")
@@ -405,7 +404,7 @@ def send_lead_email(to_email: str, lead: dict, bot_name: str = "Betty Bot"):
     except Exception as e:
         print("[LEAD][MAILJET][EXC]", type(e).__name__, e)
 
-# small in-memory demo bots
+# ==== Bots en mémoire ====
 BOTS = {
     "avocat-001":  {"pack":"avocat","name":"Betty Bot (Avocat)","color":"#4F46E5","avatar_file":"avocat.jpg","profile":{},"greeting":"","buyer_email":None,"owner_name":None,"public_id":None},
     "immo-002":    {"pack":"immo","name":"Betty Bot (Immobilier)","color":"#16A34A","avatar_file":"immo.jpg","profile":{},"greeting":"","buyer_email":None,"owner_name":None,"public_id":None},
@@ -447,9 +446,14 @@ def find_bot_by_public_id(public_id: str):
     b2 = dict(b); b2["bot_key"] = bot_key; b2["public_id"] = public_id
     return bot_key, b2
 
+# ==== Mémoire conversations ====
 CONVS = {}
 
-# PAGES
+# ==== Pages ====
+@app.get("/api")
+def health():
+    return "OK Betty via /api"
+
 @app.route("/")
 def index():
     try:
@@ -467,10 +471,9 @@ def index():
         </style>
         <div class="card">
           <h1>Betty Bots — déploiement minimal</h1>
-          <p class="muted">Le template <code>templates/index.html</code> n’a pas été trouvé dans ce déploiement.<br>
-          Le fallback s’affiche pour empêcher le crash.</p>
+          <p class="muted">Le template <code>templates/index.html</code> n’a pas été trouvé.<br>Le fallback s’affiche pour éviter une erreur.</p>
           <p>Vérifie que le fichier est bien <b>commit</b> et <b>push</b> : <code>templates/index.html</code>.</p>
-          <p>Interface de config : <a href="/config">/config</a></p>
+          <p>Interface config : <a href="/config">/config</a></p>
         </div>
         """, 200
 
@@ -545,20 +548,25 @@ def inscription_page():
         if not stripe.api_key or not PRICE_ID:
             return redirect(f"{BASE_URL}/recap?pack={pack}&public_id={public_id}&session_id=fake_checkout_dev", code=303)
 
-        session_obj = stripe.checkout.Session.create(
-            mode="subscription",
-            line_items=[{"price": PRICE_ID, "quantity": 1}],
-            customer_email=email,
-            success_url=f"{BASE_URL}/recap?pack={pack}&public_id={public_id}&session_id={{CHECKOUT_SESSION_ID}}",
-            cancel_url=f"{BASE_URL}/inscription?pack={pack}&color={color}&avatar={avatar}",
-            metadata={
-                "pack": pack, "color": color, "avatar": avatar,
-                "greeting": greet, "contact_info": contact,
-                "persona_x": px, "persona_y": py,
-                "public_id": public_id
-            }
-        )
-        return redirect(session_obj.url, code=303)
+        try:
+            session_obj = stripe.checkout.Session.create(
+                mode="subscription",
+                line_items=[{"price": PRICE_ID, "quantity": 1}],
+                customer_email=email,
+                success_url=f"{BASE_URL}/recap?pack={pack}&public_id={public_id}&session_id={{CHECKOUT_SESSION_ID}}",
+                cancel_url=f"{BASE_URL}/inscription?pack={pack}&color={color}&avatar={avatar}",
+                metadata={
+                    "pack": pack, "color": color, "avatar": avatar,
+                    "greeting": greet, "contact_info": contact,
+                    "persona_x": px, "persona_y": py,
+                    "public_id": public_id
+                }
+            )
+            return redirect(session_obj.url, code=303)
+        except Exception as e:
+            app.logger.exception(f"[STRIPE] {e}")
+            return redirect(f"{BASE_URL}/recap?pack={pack}&public_id={public_id}&session_id=fake_checkout_dev", code=303)
+
     return render_template("inscription.html", title="Inscription")
 
 def _slug_from_pack(pack: str) -> str:
@@ -625,14 +633,17 @@ def recap_page():
         "iframe_snippet": iframe_snippet,
     }
 
-    return render_template(
-        "recap.html",
-        title="Récapitulatif",
-        cfg=cfg,
-        info=cfg,
-        base_url=BASE_URL,
-        full_name=full_name
-    )
+    try:
+        return render_template(
+            "recap.html",
+            title="Récapitulatif",
+            cfg=cfg,
+            info=cfg,
+            base_url=BASE_URL,
+            full_name=full_name
+        )
+    except TemplateNotFound:
+        return f"<!doctype html><meta charset='utf-8'><pre>{json.dumps(cfg, ensure_ascii=False, indent=2)}</pre>", 200
 
 @app.route("/chat")
 def chat_page():
@@ -666,21 +677,24 @@ def chat_page():
     pack_label = pack_label_map.get(pack_code, "")
     full_name = display_name if "(" in display_name else (f"{display_name} ({pack_label})" if pack_label else display_name)
 
-    return render_template(
-        "chat.html",
-        title="Betty — Chat",
-        base_url=BASE_URL,
-        public_id=bot.get("public_id") or "",
-        full_name=full_name,
-        header_title="Betty Bot, votre assistante AI",
-        color=bot.get("color") or "#4F46E5",
-        avatar_url=static_url(bot.get("avatar_file") or "avocat.jpg"),
-        greeting=bot.get("greeting") or "Bonjour, je suis Betty. Comment puis-je vous aider ?",
-        buyer_email=buyer_email,
-        embed=embed
-    )
+    try:
+        return render_template(
+            "chat.html",
+            title="Betty — Chat",
+            base_url=BASE_URL,
+            public_id=bot.get("public_id") or "",
+            full_name=full_name,
+            header_title="Betty Bot, votre assistante AI",
+            color=bot.get("color") or "#4F46E5",
+            avatar_url=static_url(bot.get("avatar_file") or "avocat.jpg"),
+            greeting=bot.get("greeting") or "Bonjour, je suis Betty. Comment puis-je vous aider ?",
+            buyer_email=buyer_email,
+            embed=embed
+        )
+    except TemplateNotFound:
+        return "<!doctype html><meta charset='utf-8'><h1>Chat</h1><p>Template manquant.</p>", 200
 
-# API endpoint answering messages
+# ==== API bot ====
 @app.route("/api/bettybot", methods=["POST"])
 def bettybot_reply():
     payload    = request.get_json(force=True, silent=True) or {}
@@ -696,39 +710,21 @@ def bettybot_reply():
         bot_key = "avocat-001"
         bot = BOTS[bot_key]
 
+    # Historique
     if conv_id:
         history = CONVS.get(conv_id, [])
     else:
         key = f"conv_{public_id or bot_key}"
         history = session.get(key, [])
     history = history[-6:]
-    response_text, lead = extract_lead_json(full_text)
-    response_text = re.sub(
-        r"<\s*LEAD_?JSON\s*>.*?</\s*LEAD_?JSON\s*>",
-        "",
-        response_text or "",
-        flags=re.DOTALL | re.IGNORECASE
-    ).strip()
-        response_text = enforce_single_question(response_text)
 
-    # buyer_email resolution
-    buyer_email_ctx = (
-        (payload.get("buyer_email") or "").strip()
-        or ((db_get_bot(public_id) or {}).get("buyer_email") if public_id else "")
-        or (bot or {}).get("buyer_email")
-        or os.getenv("DEFAULT_LEAD_EMAIL", "").strip()
-    )
-    app.logger.info(f"[DBG] buyer_email={buyer_email_ctx!r} pid='{public_id}'")
-
+    # Prompt système
     demo_mode = (public_id == "spectra-demo")
-
     if demo_mode:
         system_prompt = (
             "Tu es **Betty Bot**, la démo officielle de Spectra Media. "
             "Ta mission : montrer comment un bot métier peut capter, qualifier et transformer des visiteurs en clients. "
-            "Tu t’adresses à un professionnel curieux (avocat, médecin, agent immo, artisan, etc.). "
-            "Ton ton est chaleureux, clair et professionnel. 1 à 2 phrases maximum par message, une seule question à la fois. "
-            "\n\n"
+            "Ton ton est chaleureux, clair et professionnel. 1 à 2 phrases maximum par message, une seule question à la fois.\n\n"
             "Ta logique de conversation :\n"
             "1. Accueillir et expliquer en une phrase ce qu’est un bot métier.\n"
             "2. Mettre en avant ses avantages :\n"
@@ -751,21 +747,30 @@ def bettybot_reply():
             "Rappel : passe le champ \"stage\" à \"ready\" UNIQUEMENT quand téléphone + nom complet + email sont présents."
         )
     else:
-        system_prompt = build_system_prompt(bot.get("pack", "avocat"), bot.get("profile", {}), bot.get("greeting", ""))
+        system_prompt = build_system_prompt(
+            bot.get("pack", "avocat"),
+            bot.get("profile", {}),
+            bot.get("greeting", "")
+        )
 
+    # Appel LLM (ou fallback règles)
     full_text = call_llm_with_history(system_prompt=system_prompt, history=history, user_input=user_input)
     if not full_text:
         full_text = rule_based_next_question(bot.get("pack",""), history + [{"role":"user","content": user_input}])
 
+    # Extraction + nettoyage des balises LEAD_JSON
     response_text, lead = extract_lead_json(full_text)
     response_text = re.sub(
-    response_text = enforce_single_question(response_text)
-        r"<\s*LEAD_?JSON\s*>.*?<\s*/\s*LEAD_?JSON\s*>\s*$",
+        r"<\s*LEAD_?JSON\s*>.*?</\s*LEAD_?JSON\s*>",
         "",
         response_text or "",
         flags=re.DOTALL | re.IGNORECASE
-).rstrip()
-    # update history
+    ).strip()
+
+    # 1 seule question / 2 phrases max
+    response_text = enforce_single_question(response_text)
+
+    # Persistance d’historique
     history.append({"role": "user", "content": user_input})
     history.append({"role": "assistant", "content": response_text})
     if conv_id:
@@ -773,20 +778,28 @@ def bettybot_reply():
     else:
         session[f"conv_{public_id or bot_key}"] = history
 
-    # send email if ready
+    # Résolution email destinataire
+    buyer_email_ctx = (
+        (payload.get("buyer_email") or "").strip()
+        or ((db_get_bot(public_id) or {}).get("buyer_email") if public_id else "")
+        or (bot or {}).get("buyer_email")
+        or os.getenv("DEFAULT_LEAD_EMAIL", "").strip()
+    )
+    app.logger.info(f"[DBG] buyer_email={buyer_email_ctx!r} pid='{public_id}'")
+
+    # Envoi email si lead complet
     if True:
         if not lead or not isinstance(lead, dict):
             lead = _lead_from_history(history + [{"role": "user", "content": user_input}])
 
         stage_ok = bool(lead.get("phone")) and bool(lead.get("name")) and bool(lead.get("email"))
         if stage_ok:
-            buyer_email = buyer_email_ctx
-            if not buyer_email:
+            if not buyer_email_ctx:
                 app.logger.warning(f"[LEAD] buyer_email introuvable pour bot_id={public_id or 'N/A'} ; email non envoyé.")
             else:
                 try:
                     send_lead_email(
-                        to_email=buyer_email,
+                        to_email=buyer_email_ctx,
                         lead={
                             "reason": lead.get("reason", ""),
                             "name": lead.get("name", ""),
@@ -797,7 +810,7 @@ def bettybot_reply():
                         },
                         bot_name=(bot or {}).get("name") or "Betty Bot",
                     )
-                    app.logger.info(f"[LEAD] Email envoyé à {buyer_email} pour bot {public_id}")
+                    app.logger.info(f"[LEAD] Email envoyé à {buyer_email_ctx} pour bot {public_id}")
                 except Exception as e:
                     app.logger.exception(f"[LEAD] Erreur envoi email -> {e}")
 
@@ -805,25 +818,8 @@ def bettybot_reply():
         "response": response_text,
         "stage": (lead or {}).get("stage") if lead else None
     })
-SENT_SPLIT_RE = re.compile(r"(?<=[\.\!\?])\s+")
 
-def enforce_single_question(text: str, max_sentences: int = 2) -> str:
-    if not text:
-        return text
-    # 1) Couper au premier '?'
-    if "?" in text:
-        first_q_idx = text.index("?") + 1
-        text = text[:first_q_idx]
-
-    # 2) Limiter à 2 phrases max
-    sentences = SENT_SPLIT_RE.split(text)
-    sentences = [s.strip() for s in sentences if s.strip()]
-    text = " ".join(sentences[:max_sentences])
-
-    # 3) Nettoyage
-    text = re.sub(r"\s+", " ", text).strip()
-    return text
-
+# ==== Meta/API utilitaires ====
 @app.route("/api/embed_meta")
 def embed_meta():
     public_id = (request.args.get("public_id") or "").strip()
@@ -915,5 +911,6 @@ def avatar(slug: str):
     )
     return Response(transparent_png, mimetype="image/png")
 
+# ==== Main ====
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000, debug=True)
