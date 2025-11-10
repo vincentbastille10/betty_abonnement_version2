@@ -753,6 +753,7 @@ def bettybot_reply():
 
     response_text, lead = extract_lead_json(full_text)
     response_text = re.sub(
+    response_text = enforce_single_question(response_text)
         r"<\s*LEAD_?JSON\s*>.*?<\s*/\s*LEAD_?JSON\s*>\s*$",
         "",
         response_text or "",
