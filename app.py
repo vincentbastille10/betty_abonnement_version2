@@ -798,6 +798,24 @@ def bettybot_reply():
         "response": response_text,
         "stage": (lead or {}).get("stage") if lead else None
     })
+SENT_SPLIT_RE = re.compile(r"(?<=[\.\!\?])\s+")
+
+def enforce_single_question(text: str, max_sentences: int = 2) -> str:
+    if not text:
+        return text
+    # 1) Couper au premier '?'
+    if "?" in text:
+        first_q_idx = text.index("?") + 1
+        text = text[:first_q_idx]
+
+    # 2) Limiter à 2 phrases max
+    sentences = SENT_SPLIT_RE.split(text)
+    sentences = [s.strip() for s in sentences if s.strip()]
+    text = " ".join(sentences[:max_sentences])
+
+    # 3) Nettoyage
+    text = re.sub(r"\s+", " ", text).strip()
+    return text
 
 @app.route("/api/embed_meta")
 def embed_meta():
