@@ -1,28 +1,20 @@
-<!-- public/index.html -->
-<!doctype html>
-<html lang="fr">
-<head>
-  <meta charset="utf-8" />
-  <meta http-equiv="refresh" content="0; url=/api/" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Redirection...</title>
-  <script>
-    window.location.replace("/api/");
-  </script>
-  <style>
-    body {
-      background: #0b0d12;
-      color: #fff;
-      font-family: sans-serif;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      height: 100vh;
-      margin: 0;
-    }
-  </style>
-</head>
-<body>
-  <p>Redirection en cours vers <b>/api/</b>...</p>
-</body>
-</html>
+# api/index.py
+# Expose la même application WSGI sous deux noms attendus par Vercel:
+# - app
+# - handler
+#
+# Si l'import de ton app principale échoue, on renvoie une page d'erreur lisible.
+
+try:
+    from app import app as flask_app  # doit exister dans app.py
+except Exception as e:
+    from flask import Flask
+    flask_app = Flask(__name__)
+
+    @flask_app.get("/")
+    def _import_error():
+        return f"Erreur d'import de app.py : {e}", 500
+
+# Expose pour tous les runtimes possibles
+app = flask_app
+handler = flask_app
