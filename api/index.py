@@ -1,23 +1,15 @@
 # api/index.py
-# Mini app Flask AUTONOME pour valider le runtime Vercel.
-# AUCUN import depuis app.py.
+# WSGI "hello world" ultra-minimal — zéro dépendance.
+# Si ceci renvoie 500, le souci vient du runtime/route Vercel, PAS de ton code.
 
-from flask import Flask, jsonify, request
-
-app = Flask(__name__)
-
-@app.get("/")
-def ping():
-    return "OK: /api/ répond ✅"
-
-@app.get("/debug")
-def debug():
-    return jsonify(
-        method=request.method,
-        headers={k: v for k, v in request.headers.items()},
-        path=request.path,
-        query=request.args
+def app(environ, start_response):
+    body = b"WSGI OK"
+    start_response(
+        "200 OK",
+        [("Content-Type", "text/plain; charset=utf-8"),
+         ("Content-Length", str(len(body)))]
     )
+    return [body]
 
-# Expose les deux noms au cas où
+# certains runtimes regardent aussi "handler"
 handler = app
