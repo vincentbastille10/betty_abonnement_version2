@@ -254,6 +254,7 @@ RAPPEL :
 """
     greet = f"\nMessage d'accueil recommandé : {greeting}\n" if greeting else ""
     return f"{base}\n{biz}\n{guide}\n{greet}"
+
 # ==== LLM ====
 def call_llm_with_history(system_prompt: str, history: list, user_input: str) -> str:
     if not TOGETHER_API_KEY:
@@ -834,116 +835,6 @@ def bettybot_reply():
                         "phone": lead.get("phone", ""),
                         "availability": lead.get("availability", ""),
                         "stage": effective_stage,
-                    },
-                    bot_name=(bot or {}).get("name") or ("Betty Bot (Démo)" if demo_mode else "Betty Bot"),
-                )
-                lead["stage"] = effective_stage
-                app.logger.info(f"[LEAD] Email ({effective_stage}) envoyé à {buyer_email_ctx} pour bot {public_id or ('demo' if demo_mode else 'N/A')}")
-            except Exception as e:
-                app.logger.exception(f"[LEAD] Erreur envoi email -> {e}")
-
-    return jsonify({
-        "response": response_text,
-        "stage": lead.get("stage") if isinstance(lead, dict) else None
-    })
-
-# ==== Meta/API utilitaires ====
-@app.route("/api/embed_meta")
-def embed_meta():
-    public_id = (request.args.get("public_id") or "").strip()
-    if not public_id:
-        return jsonify({"error": "missing public_id"}), 400
-    _, bot = find_bot_by_public_id(public_id)
-    if not bot:
-        return jsonify({"error": "bot_not_found"}), 404
-    # IMPORTANT : on **n’expose pas** l’adresse acheteur ici
-    return jsonify({
-        "bot_id": public_id,
-        "owner_name": bot.get("owner_name") or "Client",
-        "display_name": bot.get("name") or "Betty Bot",
-        "color_hex": bot.get("color") or "#4F46E5",
-        "avatar_url": static_url(bot.get("avatar_file") or "avocat.jpg"),
-        "greeting": bot.get("greeting") or "Bonjour, qu’est-ce que je peux faire pour vous ?"
-    })
-
-@app.route("/api/bot_meta")
-def bot_meta():
-    bot_id = (request.args.get("bot_id") or request.args.get("public_id") or "").strip()
-    if bot_id == "spectra-demo":
-        b = BOTS["spectra-demo"]
-        return jsonify({
-            "name": "Betty Bot (Spectra Media)",
-            "color_hex": b.get("color") or "#4F46E5",
-            "avatar_url": static_url(b.get("avatar_file") or "avocat.jpg"),
-            "greeting": b.get("greeting") or "Bonjour et bienvenue chez Spectra Media. Souhaitez-vous créer votre Betty Bot métier ?"
-        })
-    if bot_id in BOTS:
-        b = BOTS[bot_id]
-        demo_greetings = {
-            "avocat-001":  "Bonjour et bienvenue au cabinet Werner & Werner. Que puis-je faire pour vous ?",
-            "immo-002":    "Bonjour et bienvenue à l’agence Werner Immobilier. Comment puis-je vous aider ?",
-            "medecin-003": "Bonjour et bienvenue au cabinet Werner Santé. Que puis-je faire pour vous ?",
-        }
-        return jsonify({
-            "name": b.get("name") or "Betty Bot",
-            "color_hex": b.get("color") or "#4F46E5",
-            "avatar_url": static_url(b.get("avatar_file") or "avocat.jpg"),
-            "greeting": demo_greetings.get(bot_id, "Bonjour, qu’est-ce que je peux faire pour vous ?")
-        })
-    _, bot = find_bot_by_public_id(bot_id)
-    if not bot:
-        return jsonify({"error": "bot_not_found"}), 404
-    return jsonify({
-        "name": bot.get("name") or "Betty Bot",
-        "color_hex": bot.get("color") or "#4F46E5",
-        "avatar_url": static_url(bot.get("avatar_file") or "avocat.jpg"),
-        "greeting": bot.get("greeting") or "Bonjour, qu’est-ce que je peux faire pour vous ?"
-    })
-
-@app.route("/healthz")
-def healthz():
-    return "ok", 200
-
-@app.route("/api/reset", methods=["POST"])
-def reset_conv():
-    key = (request.get_json(silent=True) or {}).get("key")
-    if key and key in CONVS:
-        CONVS.pop(key, None)
-    return jsonify({"ok": True})
-
-@app.route("/api/test_mailjet")
-def test_mailjet():
-    to = (request.args.get("to") or os.getenv("TEST_TO_EMAIL") or "").strip()
-    if not to:
-        return jsonify({"ok": False, "error": "missing 'to' param"}), 400
-    lead = {
-        "reason": "Test automatique",
-        "name": "Lead Test",
-        "email": "lead@example.com",
-        "phone": "+33000000000",
-        "availability": "demain 10h",
-        "stage": "ready",
-    }
-    send_lead_email(to, lead, bot_name="Betty Bot (test)")
-    return jsonify({"ok": True, "to": to})
-
-@app.route("/avatar/<slug>")
-def avatar(slug: str):
-    static_dir = os.path.join(app.root_path, "static")
-    filename = f"logo-{slug}.jpg"
-    path = os.path.join(static_dir, filename)
-    if os.path.exists(path):
-        return send_from_directory(static_dir, filename)
-    transparent_png = base64.b64decode(
-        "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+Xad8AAAAASUVORK5CYII="
-    )
-    return Response(transparent_png, mimetype="image/png")
-
-# ==== Main ====
-if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5000, debug=True)
-
-
                     },
                     bot_name=(bot or {}).get("name") or ("Betty Bot (Démo)" if demo_mode else "Betty Bot"),
                 )
