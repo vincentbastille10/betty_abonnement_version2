@@ -280,8 +280,14 @@ def call_llm_with_history(system_prompt: str, history: list, user_input: str) ->
     messages = [{"role": "system", "content": system_prompt}]
     messages.extend(history or [])
     messages.append({"role": "user", "content": user_input})
-    payload = {"model": LLM_MODEL, "max_tokens": LLM_MAX_TOKENS, "temperature": 0.4, "messages": messages}
-    backoffs = [0.6, 1.2, 2.4, 4.8]
+    payload = {
+    "model": LLM_MODEL,
+    "max_tokens": LLM_MAX_TOKENS,
+    "temperature": 0.3,
+    "messages": messages
+}
+backoffs = [0.4, 0.8, 1.6]  # plus court
+
     last_err_text = None
     for wait in backoffs:
         try:
