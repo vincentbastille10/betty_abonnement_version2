@@ -357,6 +357,9 @@ def enforce_single_question(text: str, max_sentences: int = 2) -> str:
     text = " ".join(sentences[:max_sentences])
     text = re.sub(r"\s+", " ", text).strip()
     return text
+# ==== Intent & consentement ====
+INTENT_RDV_RE = re.compile(r"\b(rendez[- ]?vous|rdv|prise? (de )?rendez[- ]?vous|prendre un rdv|booking|appointment)\b", re.I)
+CONSENT_RE    = re.compile(r"\b(oui|ok|okay|yes|si|d['’ ]?accord|vas[- ]?y|go|let.?s go|ça marche|ca marche)\b", re.I)
 
 def rule_based_next_question(pack: str, history: list) -> str:
     lead = _lead_from_history(history)
