@@ -7,22 +7,27 @@
   <style>
     :root{--bg:#0b0f1e;--card:#0f1724;--ink:#e8ecff}
     html,body{margin:0;padding:0;background:var(--bg);color:var(--ink);font-family:Inter,system-ui,Segoe UI,Roboto,Arial}
+
+    /* Conteneur : mise en page stable (pas de saut de page) */
     .wrap{
       max-width:920px;margin:32px auto;padding:24px;background:var(--card);
       border-radius:12px;border:1px solid rgba(255,255,255,.08);
-      height:auto;max-height:80vh;overflow:hidden; /* empêche d'étirer la page */
+      display:flex;flex-direction:column;
+      height:80vh;max-height:80vh; /* hauteur fixe à la fenêtre */
+      overflow:hidden;             /* le scroll se fait dans #messages */
     }
+
     .header{display:flex;align-items:center;gap:16px}
     .avatar{width:64px;height:64px;border-radius:12px;object-fit:cover}
     .title{font-size:18px;margin:0}
     .greet{color:#b8c2d6;margin-top:6px}
     .small{font-size:13px;color:#9aa7c7}
 
-    /* Zone de messages : scroll interne uniquement */
+    /* Zone de messages : scroll interne uniquement et infini */
     #messages{
       margin-top:18px;background:#071020;padding:14px;border-radius:8px;
-      min-height:240px;max-height:420px;overflow-y:auto;
-      scroll-behavior:auto; /* pas de smooth global */
+      flex:1;min-height:0;           /* clé pour éviter le blocage après 3 msgs */
+      overflow-y:auto;scroll-behavior:auto;
     }
     .msg{padding:8px 10px;border-radius:8px;margin-bottom:8px;line-height:1.4}
     .user{background:#1f2937;text-align:right}
@@ -38,11 +43,13 @@
       color:white;cursor:pointer
     }
 
-    /* Infos techniques invisibles (couleur = fond) */
+    /* Données techniques invisibles (gardées dans le DOM) */
     .hidden-tech{
       color:#0b0f1e;font-size:1px;height:1px;overflow:hidden;line-height:1px;
       user-select:none
     }
+    /* masque complet d’un bloc (rien n’apparaît) */
+    .visually-hidden{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0}
   </style>
 </head>
 <body>
@@ -52,15 +59,16 @@
       <div>
         <h1 class="title">{{ full_name }}</h1>
         <div class="greet">{{ greeting }}</div>
-        <!-- Affichages visibles minimalistes -->
-        <div class="small">Bot ID: {{ public_id }}</div>
+
+        <!-- ÉLÉMENTS VISIBLES SUPPRIMÉS POUR NE PAS AFFICHER L'ID NI L'EMAIL -->
+        <div class="visually-hidden">Bot ID: {{ public_id }}</div>
         {% if buyer_email %}
-          <div class="small">Adresse acheteur : {{ buyer_email }}</div>
+          <div class="visually-hidden">Adresse acheteur : {{ buyer_email }}</div>
         {% endif %}
       </div>
     </div>
 
-    <!-- Données techniques cachées (ne pas supprimer) -->
+    <!-- Données techniques cachées (doivent rester en DOM) -->
     <p class="hidden-tech">Bot ID: {{ public_id }}</p>
     <p class="hidden-tech">Acheteur: {{ buyer_email }}</p>
     <p class="hidden-tech">Les leads complets (nom + téléphone + e-mail) sont transmis automatiquement à l'adresse associée au bot.</p>
@@ -69,7 +77,7 @@
 
     <div class="footer">
       <input id="input" type="text" autocomplete="off" placeholder="Écrivez votre message ici..." />
-      <button id="send">Envoyer</button>
+      <button id="send" type="button">Envoyer</button>
     </div>
   </div>
 
@@ -84,8 +92,7 @@
       m.className = "msg " + cls;
       m.textContent = text;
       box.appendChild(m);
-      // ⚠️ Scroll interne uniquement (pas de scrollIntoView global)
-      box.scrollTop = box.scrollHeight;
+      box.scrollTop = box.scrollHeight; // scroll interne uniquement
     }
 
     async function send(){
@@ -101,7 +108,7 @@
           body: JSON.stringify({
             message: text,
             public_id: publicId,
-            buyer_email: buyerEmail  // ← transmis au back (non affiché)
+            buyer_email: buyerEmail   // transmis au back, jamais affiché
           })
         });
         const data = await resp.json();
@@ -118,10 +125,9 @@
     // Message de bienvenue
     addMsg("Bonjour. Je suis votre assistante. Comment puis-je aider ?", "bot");
 
-    // Si intégré en iframe, évite les effets de scroll sur la page parente
+    // Si intégré en iframe, neutralise le scroll parent
     if (window.parent !== window) {
       document.body.style.overflow = "hidden";
-      window.addEventListener("resize", () => { document.body.style.overflow = "hidden"; });
     }
   </script>
 </body>
