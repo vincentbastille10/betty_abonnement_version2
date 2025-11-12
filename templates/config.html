@@ -10,40 +10,33 @@
   <section class="card">
     <h2>Métier</h2>
     <div class="avatar-grid">
+
       <!-- Avocat -->
-      <label class="avatar-card">
-        <input type="radio" name="pack" value="avocat" checked>
+      <label class="avatar-card selected">
+        <input type="radio" name="pack" value="avocat" data-avatar="avocat.jpg" checked>
         <img src="{{ url_for('static', filename='avocat.jpg') }}" alt="Avocat">
         <div class="a-label">Avocat</div>
-        <!-- on envoie aussi le fichier avatar -->
-        <input type="hidden" name="avatar" value="avocat.jpg">
       </label>
 
       <!-- Médecin -->
       <label class="avatar-card">
-        <input type="radio" name="pack" value="medecin">
+        <input type="radio" name="pack" value="medecin" data-avatar="medecin.jpg">
         <img src="{{ url_for('static', filename='medecin.jpg') }}" alt="Médecin">
         <div class="a-label">Médecin</div>
-        <input type="hidden" name="avatar" value="medecin.jpg">
       </label>
 
       <!-- Immobilier -->
       <label class="avatar-card">
-        <input type="radio" name="pack" value="immo">
+        <input type="radio" name="pack" value="immo" data-avatar="immo.jpg">
         <img src="{{ url_for('static', filename='immo.jpg') }}" alt="Immobilier">
         <div class="a-label">Immobilier</div>
-        <input type="hidden" name="avatar" value="immo.jpg">
       </label>
 
-      <!-- (Optionnel) Notaire -->
-      <label class="avatar-card">
-        <input type="radio" name="pack" value="notaire">
-        <img src="{{ url_for('static', filename='notaire.jpg') }}" alt="Notaire" onerror="this.parentElement.style.display='none'">
-        <div class="a-label">Notaire</div>
-        <input type="hidden" name="avatar" value="notaire.jpg">
-      </label>
     </div>
     <small class="hint">Cliquez pour sélectionner. Taille d’affichage : 4 cm × 4 cm.</small>
+
+    <!-- 🔒 Un SEUL avatar envoyé au back -->
+    <input type="hidden" name="avatar" id="avatar-hidden" value="avocat.jpg">
   </section>
 
   <!-- Couleurs -->
@@ -85,7 +78,7 @@
     </div>
     <input type="hidden" name="persona_x" id="persona_x" value="0">
     <input type="hidden" name="persona_y" id="persona_y" value="0">
-    <small class="hint">Déplacez le curseur dans la zone : gauche = empathique, droite = efficace, haut = chaleureuse, bas = précise.</small>
+    <small class="hint">Déplacez le curseur : gauche = empathique, droite = efficace, haut = chaleureuse, bas = précise.</small>
   </section>
 
   <!-- Contenus -->
@@ -113,77 +106,62 @@ Horaires : Lun–Ven 9h–12h / 14h–18h"></textarea>
 </form>
 
 <script>
-  // --- Sélection avatar : quand on clique sur un avatar, mettre le bon fichier 'avatar' lié au pack ---
-  const avatarCards = document.querySelectorAll('.avatar-card');
-  avatarCards.forEach(card => {
-    card.addEventListener('click', () => {
-      // retire l'état sélectionné visuel
-      avatarCards.forEach(c => c.classList.remove('selected'));
-      card.classList.add('selected');
+  // ====== Pack <-> Avatar : synchro 100% fiable ======
+  const packRadios   = document.querySelectorAll('input[type="radio"][name="pack"]');
+  const avatarHidden = document.getElementById('avatar-hidden');
+  const cards        = document.querySelectorAll('.avatar-card');
 
-      // garde le <input name="avatar"> du label cliqué et désactive les autres
-      const packInput = card.querySelector('input[type="radio"][name="pack"]');
-      const allPackInputs = document.querySelectorAll('input[type="radio"][name="pack"]');
-      allPackInputs.forEach(r => r.checked = false);
-      packInput.checked = true;
+  function applySelection(radio){
+    // 1) avatar (valeur envoyée au backend)
+    const file = radio.getAttribute('data-avatar') || 'avocat.jpg';
+    avatarHidden.value = file;
 
-      // synchronise le champ avatar caché global: on prend la valeur du hidden de la carte
-      const avatarFile = card.querySelector('input[type="hidden"][name="avatar"]').value;
-      // crée/maj un input hidden global unique "avatar" pour le form
-      let globalAvatar = document.querySelector('input[name="_avatar_global"]');
-      if(!globalAvatar){
-        globalAvatar = document.createElement('input');
-        globalAvatar.type = 'hidden';
-        globalAvatar.name = '_avatar_global';
-        document.getElementById('cfg-form').appendChild(globalAvatar);
-      }
-      globalAvatar.value = avatarFile;
-    });
+    // 2) carte active (surbrillance)
+    cards.forEach(c => c.classList.remove('selected'));
+    const card = radio.closest('.avatar-card');
+    if(card) card.classList.add('selected');
+  }
+
+  // Initialisation (au cas où le serveur prérenseigne un pack)
+  document.addEventListener('DOMContentLoaded', () => {
+    const checked = document.querySelector('input[name="pack"]:checked');
+    if (checked) applySelection(checked);
   });
 
-  // Au submit, remap _avatar_global -> avatar (compat route)
-  document.getElementById('cfg-form').addEventListener('submit', (e)=>{
-    const gv = document.querySelector('input[name="_avatar_global"]');
-    if(gv){
-      const real = document.createElement('input');
-      real.type = 'hidden';
-      real.name = 'avatar';
-      real.value = gv.value || 'avocat.jpg';
-      e.target.appendChild(real);
+  // Changement de pack
+  packRadios.forEach(r => {
+    r.addEventListener('change', () => applySelection(r));
+    // Support clic sur toute la carte (label)
+    const card = r.closest('.avatar-card');
+    if(card){
+      card.addEventListener('click', () => {
+        r.checked = true;
+        applySelection(r);
+      });
     }
   });
 
-  // --- Joystick 2D (axes -1..+1) ---
-  const joy = document.getElementById('joy');
-  const thumb = document.getElementById('thumb');
-  const ix = document.getElementById('persona_x');
-  const iy = document.getElementById('persona_y');
-
-  const size = 220;         // taille en px du carré (CSS ci-dessous aussi)
-  const radius = (size/2);  // demi-côté
-
+  // ====== Joystick 2D ======
+  const joy  = document.getElementById('joy');
+  const thumb= document.getElementById('thumb');
+  const ix   = document.getElementById('persona_x');
+  const iy   = document.getElementById('persona_y');
+  const size = 220, radius = size/2;
   let dragging = false;
 
   function setThumbFromEvent(ev){
     const rect = joy.getBoundingClientRect();
     let x = (ev.clientX ?? (ev.touches && ev.touches[0].clientX)) - rect.left;
     let y = (ev.clientY ?? (ev.touches && ev.touches[0].clientY)) - rect.top;
-
-    // clamp dans le carré
     x = Math.max(0, Math.min(size, x));
     y = Math.max(0, Math.min(size, y));
-
-    // centre -> -1..+1
-    const nx = (x - radius) / radius; // gauche -1, droite +1
-    const ny = (radius - y) / radius; // haut +1, bas -1  (on inversera pour correspondre à la consigne)
-    // conversion demandée: haut=chaleureuse => y positif; bas=précise => y négatif
+    const nx = (x - radius) / radius;
+    const ny = (radius - y) / radius;
     ix.value = nx.toFixed(2);
     iy.value = ny.toFixed(2);
-
     thumb.style.left = (x - 10) + 'px';
     thumb.style.top  = (y - 10) + 'px';
   }
-
   function startDrag(ev){ dragging = true; setThumbFromEvent(ev); }
   function moveDrag(ev){ if(dragging){ ev.preventDefault(); setThumbFromEvent(ev); } }
   function endDrag(){ dragging = false; }
@@ -191,7 +169,6 @@ Horaires : Lun–Ven 9h–12h / 14h–18h"></textarea>
   joy.addEventListener('mousedown', startDrag);
   joy.addEventListener('mousemove', moveDrag);
   window.addEventListener('mouseup', endDrag);
-
   joy.addEventListener('touchstart', startDrag, {passive:false});
   joy.addEventListener('touchmove',  moveDrag,  {passive:false});
   window.addEventListener('touchend', endDrag);
