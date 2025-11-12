@@ -319,53 +319,61 @@ def extract_lead_json(text: str):
 def _lead_from_history(history: list) -> dict:
     """
     Extraction robuste à partir de l'historique utilisateur (LLM + texte brut).
-    Tolère : MAJUSCULES, tirets, apostrophes, "nom prénom" sans intro, etc.
+    Tolère : MAJUSCULES, tirets, apostrophes, 'nom prénom' sans intro, etc.
+    Ne dépend plus du 'dernier message' pour le nom : fouille tout l'historique.
     """
-    user_text = " ".join([m.get("content","") for m in history if m.get("role") == "user"]) or ""
+    user_msgs = [ (m.get("content") or "").strip() for m in history if m.get("role") == "user" ]
+    user_text = " ".join(user_msgs)
     d = {"reason": "", "email": "", "phone": "", "name": "", "availability": "", "stage": "collecting"}
-    if not user_text:
+
+    if not user_msgs:
         return d
 
-    # Email
-    m = re.search(r'[\w\.-]+@[\w\.-]+\.\w+', user_text)
-    if m:
-        d["email"] = m.group(0)
+    # Email — premier match trouvé dans tout l'historique (on lit depuis la fin)
+    m_email = re.search(r'[\w\.-]+@[\w\.-]+\.\w+', user_text, flags=re.I)
+    if m_email:
+        d["email"] = m_email.group(0)
 
-    # Téléphone (simple mais tolérant)
-    m = re.search(r'(\+?\d[\d \.\-\(\)]{6,})', user_text)
-    if m:
-        d["phone"] = re.sub(r'[^0-9\+]', '', m.group(1)).strip()
+    # Téléphone — simple mais tolérant (on normalise en enlevant espaces/().-)
+    m_phone = re.search(r'(\+?\d[\d \.\-\(\)]{6,})', user_text)
+    if m_phone:
+        d["phone"] = re.sub(r'[^0-9\+]', '', m_phone.group(1)).strip()
 
-    # Nom via formulations "je m'appelle" / "nom :"
-    m = re.search(r"(?:je m(?:'|e)appelle|nom\s*:?)\s*([A-Za-zÀ-ÖØ-öø-ÿ'\-\s]{2,80})", user_text, re.I)
-    if m:
-        d["name"] = m.group(1).strip()
+    # Nom — 1) formulations explicites
+    m_name = re.search(r"(?:je m(?:'|e)appelle|nom\s*:?)\s*([A-Za-zÀ-ÖØ-öø-ÿ'\-\s]{2,80})", user_text, re.I)
+    if m_name:
+        d["name"] = m_name.group(1).strip()
 
-    # Fallback nom : dernier message usager = 2–3 tokens alphabétiques → nom
+    # Nom — 2) fallback robuste : balaye l'historique à l'envers et prend
+    # le PREMIER message "propre" comportant 2 à 3 tokens alphabétiques (pas de chiffres, pas d'@)
     if not d["name"]:
-        last_user = ""
-        for m in reversed(history):
-            if m.get("role") == "user":
-                last_user = (m.get("content") or "").strip()
-                break
-        if last_user and re.fullmatch(r"[A-Za-zÀ-ÖØ-öø-ÿ' \-]{3,80}", last_user):
-            tokens = [t for t in re.split(r"\s+", last_user) if t]
-            # évite les confusions si l'utilisateur tape autre chose qu'un nom
-            if 2 <= len(tokens) <= 3 and not re.search(r'@|\d', last_user):
+        for msg in reversed(user_msgs):
+            txt = msg.strip()
+            if not txt or '@' in txt or re.search(r'\d', txt):
+                continue
+            # uniquement lettres/accent/apostrophes/tirets/espaces, et longueur raisonnable
+            if not re.fullmatch(r"[A-Za-zÀ-ÖØ-öø-ÿ' \-]{3,80}", txt):
+                continue
+            tokens = [t for t in re.split(r"\s+", txt) if t]
+            if 2 <= len(tokens) <= 3:
+                # Évite des faux positifs super génériques (ex: "bonjour", "oui merci")
+                lower = txt.lower()
+                if any(w in lower for w in ["bonjour", "bonsoir", "merci", "svp", "rdv", "rendez", "appel", "mail"]):
+                    continue
                 d["name"] = " ".join(t.capitalize() for t in tokens)
+                break
 
     # Motif / disponibilité (indicatif)
-    m = re.search(r'(?:souhaite|veux|voudrais|besoin|motif|pour)\s*:?(.{5,140})', user_text, re.I)
-    if m:
-        d["reason"] = m.group(1).strip()
-    m = re.search(r'(demain|matin|après-midi|soir|lundi|mardi|mercredi|jeudi|vendredi)[^\.!?]{0,60}', user_text, re.I)
-    if m:
-        d["availability"] = m.group(0).strip()
+    m_reason = re.search(r'(?:souhaite|veux|voudrais|besoin|motif|pour)\s*:?(.{5,140})', user_text, re.I)
+    if m_reason:
+        d["reason"] = m_reason.group(1).strip()
+    m_avail = re.search(r'(demain|matin|après-midi|soir|lundi|mardi|mercredi|jeudi|vendredi)[^\.!?]{0,60}', user_text, re.I)
+    if m_avail:
+        d["availability"] = m_avail.group(0).strip()
 
     if d["phone"] and d["name"] and d["email"]:
         d["stage"] = "ready"
     return d
-
 
 # Limitation à 1 question / 2 phrases
 SENT_SPLIT_RE = re.compile(r"(?<=[\.\!\?])\s+")
