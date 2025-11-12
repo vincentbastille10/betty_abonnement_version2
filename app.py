@@ -739,33 +739,32 @@ def recap_page():
 
 @app.route("/chat")
 def chat_page():
-    public_id = (request.args.get("public_id") or "").strip()
-    embed     = request.args.get("embed", "0") == "1"
-    buyer_email = request.args.get("buyer_email", "").strip()
+    public_id   = (request.args.get("public_id") or "").strip()
+    embed       = request.args.get("embed", "0") == "1"
+    buyer_email = (request.args.get("buyer_email") or "").strip()
 
-    bot = db_get_bot(public_id)
+    # 👉 Utilise la résolution robuste (DB si dispo, sinon déduction par préfixe du public_id)
+    bot_key, bot = find_bot_by_public_id(public_id)
+
     if not bot:
-        base = BOTS["avocat-001"]
+        # on déduit au minimum le bon pack via le bot_key ; sinon avocat
+        bot_key = bot_key or "avocat-001"
+        base = BOTS.get(bot_key, BOTS["avocat-001"])
         bot = {
-            "public_id": public_id or "avocat-001-demo",
+            "public_id": public_id or f"{bot_key}-demo",
             "name": base["name"],
             "color": base["color"],
             "avatar_file": base["avatar_file"],
             "greeting": "Bonjour, qu’est-ce que je peux faire pour vous ?",
             "owner_name": "Client",
             "profile": {},
-            "pack": base["pack"]
+            "pack": base["pack"],
         }
 
     display_name = bot.get("name") or "Betty Bot"
+
     pack_code = (bot.get("pack") or "").lower()
-    pack_label_map = {
-        "medecin": "Médecin",
-        "avocat": "Avocat",
-        "immo": "Immobilier",
-        "immobilier": "Immobilier",
-        "notaire": "Notaire",
-    }
+    pack_label_map = {"medecin":"Médecin","avocat":"Avocat","immo":"Immobilier","immobilier":"Immobilier"}
     pack_label = pack_label_map.get(pack_code, "")
     full_name = display_name if "(" in display_name else (f"{display_name} ({pack_label})" if pack_label else display_name)
 
@@ -780,7 +779,7 @@ def chat_page():
             color=bot.get("color") or "#4F46E5",
             avatar_url=static_url(bot.get("avatar_file") or "avocat.jpg"),
             greeting=bot.get("greeting") or "Bonjour, qu’est-ce que je peux faire pour vous ?",
-            buyer_email=buyer_email,  # passage pour back uniquement, ne pas afficher côté front
+            buyer_email=buyer_email,  # passage pour le back, non affiché
             embed=embed
         )
     except TemplateNotFound:
