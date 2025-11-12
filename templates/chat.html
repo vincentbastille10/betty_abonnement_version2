@@ -6,64 +6,70 @@
   <title>{{ title or "Betty — Chat" }}</title>
   <style>
     :root{--bg:#0b0f1e;--card:#0f1724;--ink:#e8ecff}
-    body{margin:0;background:var(--bg);color:var(--ink);font-family:Inter,system-ui,Segoe UI,Roboto,Arial,sans-serif}
-    .wrap{max-width:920px;margin:32px auto;padding:24px;background:var(--card);border-radius:16px;box-shadow:0 10px 30px rgba(0,0,0,.35)}
+    html,body{margin:0;padding:0;background:var(--bg);color:var(--ink);font-family:Inter,system-ui,Segoe UI,Roboto,Arial}
+    .wrap{
+      max-width:920px;margin:32px auto;padding:24px;background:var(--card);
+      border-radius:12px;border:1px solid rgba(255,255,255,.08);
+      height:auto;max-height:80vh;overflow:hidden; /* empêche d'étirer la page */
+    }
     .header{display:flex;align-items:center;gap:16px}
     .avatar{width:64px;height:64px;border-radius:12px;object-fit:cover}
     .title{font-size:18px;margin:0}
     .greet{color:#b8c2d6;margin-top:6px}
-    #messages{margin-top:18px;background:#071020;padding:14px;border-radius:12px;min-height:240px;max-height:420px;overflow:auto}
-    .msg{padding:10px 12px;border-radius:10px;margin:8px 0;line-height:1.4}
-    .user{background:#1f2937;text-align:right}
-    .bot{background:#0b1222;text-align:left}
-    .footer{display:flex;gap:8px;margin-top:12px}
-    input[type=text]{flex:1;padding:12px;border-radius:10px;border:1px solid rgba(255,255,255,.08);background:#07101b;color:var(--ink)}
-    button{padding:12px 16px;border-radius:10px;border:0;background:{{ color or '#4F46E5' }};color:#fff;cursor:pointer}
     .small{font-size:13px;color:#9aa7c7}
 
-    /* --- Métadonnées invisibles à l’écran (mais présentes dans le DOM) --- */
-    .hidden-meta{
-      position:absolute !important;
-      left:-9999px !important;
-      height:1px !important;
-      width:1px !important;
-      overflow:hidden !important;
-      opacity:0 !important;
-      pointer-events:none !important;
-      user-select:none !important;
+    /* Zone de messages : scroll interne uniquement */
+    #messages{
+      margin-top:18px;background:#071020;padding:14px;border-radius:8px;
+      min-height:240px;max-height:420px;overflow-y:auto;
+      scroll-behavior:auto; /* pas de smooth global */
+    }
+    .msg{padding:8px 10px;border-radius:8px;margin-bottom:8px;line-height:1.4}
+    .user{background:#1f2937;text-align:right}
+    .bot{background:#0b1222;text-align:left}
+
+    .footer{display:flex;gap:8px;margin-top:12px}
+    input[type=text]{
+      flex:1;padding:10px;border-radius:8px;border:1px solid rgba(255,255,255,.06);
+      background:#07101b;color:var(--ink)
+    }
+    button{
+      padding:10px 14px;border-radius:8px;border:0;background:{{ color or '#4F46E5' }};
+      color:white;cursor:pointer
+    }
+
+    /* Infos techniques invisibles (couleur = fond) */
+    .hidden-tech{
+      color:#0b0f1e;font-size:1px;height:1px;overflow:hidden;line-height:1px;
+      user-select:none
     }
   </style>
 </head>
 <body>
-  <div class="wrap" role="main">
+  <div class="wrap" role="main" aria-label="Fenêtre de conversation Betty">
     <div class="header">
       <img class="avatar" src="{{ avatar_url }}" alt="avatar">
       <div>
         <h1 class="title">{{ full_name }}</h1>
         <div class="greet">{{ greeting }}</div>
-
-        <!-- Métadonnées masquées -->
-        <div class="small hidden-meta" aria-hidden="true">Bot ID: {{ public_id }}</div>
+        <!-- Affichages visibles minimalistes -->
+        <div class="small">Bot ID: {{ public_id }}</div>
         {% if buyer_email %}
-          <div class="small hidden-meta" aria-hidden="true">Adresse acheteur : {{ buyer_email }}</div>
+          <div class="small">Adresse acheteur : {{ buyer_email }}</div>
         {% endif %}
       </div>
     </div>
 
-    <!-- Copie technique masquée (debug éventuel) -->
-    <p class="hidden-meta" aria-hidden="true">Bot ID: {{ public_id }}</p>
-    <p class="hidden-meta" aria-hidden="true">Acheteur: {{ buyer_email }}</p>
+    <!-- Données techniques cachées (ne pas supprimer) -->
+    <p class="hidden-tech">Bot ID: {{ public_id }}</p>
+    <p class="hidden-tech">Acheteur: {{ buyer_email }}</p>
+    <p class="hidden-tech">Les leads complets (nom + téléphone + e-mail) sont transmis automatiquement à l'adresse associée au bot.</p>
 
     <div id="messages" aria-live="polite"></div>
 
     <div class="footer">
-      <input id="input" type="text" placeholder="Ecrivez votre message ici..." autocomplete="off" />
+      <input id="input" type="text" autocomplete="off" placeholder="Écrivez votre message ici..." />
       <button id="send">Envoyer</button>
-    </div>
-
-    <!-- Mention légale masquée -->
-    <div class="small hidden-meta" aria-hidden="true">
-      Les leads complets (nom + téléphone + e-mail) sont transmis automatiquement à l'adresse associée au bot.
     </div>
   </div>
 
@@ -72,46 +78,51 @@
     const buyerEmail = "{{ buyer_email }}";
     const apiUrl     = "/api/bettybot";
 
-    const $msgs = document.getElementById("messages");
-    const $inp  = document.getElementById("input");
-    const $btn  = document.getElementById("send");
-
-    function addMsg(text, cls="bot"){
+    const box = document.getElementById("messages");
+    function addMsg(text, cls="bot") {
       const m = document.createElement("div");
       m.className = "msg " + cls;
-      m.innerText = text;
-      $msgs.appendChild(m);
-      m.scrollIntoView({behavior:"smooth", block:"end"});
+      m.textContent = text;
+      box.appendChild(m);
+      // ⚠️ Scroll interne uniquement (pas de scrollIntoView global)
+      box.scrollTop = box.scrollHeight;
     }
 
     async function send(){
-      const text = ($inp.value || "").trim();
+      const el = document.getElementById("input");
+      const text = el.value.trim();
       if(!text) return;
       addMsg(text, "user");
-      $inp.value = "";
+      el.value = "";
       try{
         const resp = await fetch(apiUrl, {
-          method: "POST",
+          method:"POST",
           headers: {"Content-Type":"application/json"},
           body: JSON.stringify({
             message: text,
             public_id: publicId,
-            buyer_email: buyerEmail
+            buyer_email: buyerEmail  // ← transmis au back (non affiché)
           })
         });
         const data = await resp.json();
-        addMsg(data.response || "Désolé, pas de réponse.", "bot");
+        addMsg(data.response || "Désolé, pas de réponse", "bot");
       }catch(e){
-        console.error(e);
         addMsg("Erreur de connexion au serveur.", "bot");
+        console.error(e);
       }
     }
 
-    $btn.addEventListener("click", send);
-    $inp.addEventListener("keydown", (e)=>{ if(e.key==="Enter") send(); });
+    document.getElementById("send").addEventListener("click", send);
+    document.getElementById("input").addEventListener("keydown", (e)=>{ if(e.key==="Enter"){ send(); } });
 
-    // Message d'accueil
+    // Message de bienvenue
     addMsg("Bonjour. Je suis votre assistante. Comment puis-je aider ?", "bot");
+
+    // Si intégré en iframe, évite les effets de scroll sur la page parente
+    if (window.parent !== window) {
+      document.body.style.overflow = "hidden";
+      window.addEventListener("resize", () => { document.body.style.overflow = "hidden"; });
+    }
   </script>
 </body>
 </html>
