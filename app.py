@@ -441,11 +441,11 @@ def guardrailed_reply(history: list, user_input: str, llm_text: str, pack: str) 
 
     # 5) Sinon on conserve le LLM mais on impose la prochaine question manquante
     if not lead["name"]:
-    return enforce_single_question("Pour commencer, quel est votre nom et prénom complets ?"), lead, consent, "collecting"
+        return enforce_single_question("Pour commencer, quel est votre nom et prénom complets ?"), lead, consent, "collecting"
     if not lead["phone"]:
-    return enforce_single_question("Merci. Quel est votre numéro de téléphone ?"), lead, consent, "collecting"
+        return enforce_single_question("Merci. Quel est votre numéro de téléphone ?"), lead, consent, "collecting"
     if not lead["email"]:
-    return enforce_single_question("Parfait. Quelle est votre adresse e-mail ?"), lead, consent, "collecting"
+        return enforce_single_question("Parfait. Quelle est votre adresse e-mail ?"), lead, consent, "collecting"
 
     ok = "Parfait, je transmets vos coordonnées pour vous proposer un rendez-vous."
     return enforce_single_question(ok), {**lead, "stage":"ready"}, True, "ready"
