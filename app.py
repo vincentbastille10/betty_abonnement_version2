@@ -388,9 +388,8 @@ CONSENT_RE    = re.compile(r"\b(oui|ok|okay|yes|si|d['’ ]?accord|vas[- ]?y|go|
 def guardrailed_reply(history: list, user_input: str, llm_text: str, pack: str) -> tuple[str, dict, bool, str]:
     """
     Retourne (response_text, lead_dict, should_send_now, stage)
-    - 1re réplique imposée
-    - Séquence déterministe : nom -> email -> téléphone (+ consentement à transmettre)
-    - Envoi autorisé si stage=ready OU consentement explicite avec au moins 1 info utile
+    Séquence déterministe : Nom -> Téléphone -> Email (+ consentement optionnel).
+    Envoi autorisé si stage=ready OU consentement explicite avec au moins 1 info utile.
     """
     augmented_history = history + ([{"role":"user","content": user_input}] if user_input else [])
     lead = _lead_from_history(augmented_history)
@@ -400,47 +399,48 @@ def guardrailed_reply(history: list, user_input: str, llm_text: str, pack: str) 
         msg = "Bonjour, qu’est-ce que je peux faire pour vous ?"
         return enforce_single_question(msg), lead, False, "collecting"
 
-    # 2) Détection d'intent & consentement
-    text_window = (" ".join([m["content"] for m in augmented_history if m.get("role") in ("user","assistant")]) or "")
+    # 2) Intent & consent
+    INTENT_RDV_RE = re.compile(r"\b(rendez[- ]?vous|rdv|prise? (de )?rendez[- ]?vous|prendre un rdv|booking|appointment)\b", re.I)
+    CONSENT_RE    = re.compile(r"\b(oui|ok|okay|yes|si|d['’ ]?accord|vas[- ]?y|go|let.?s go|ça marche|ca marche)\b", re.I)
+    text_window = " ".join([m["content"] for m in augmented_history if m.get("role") in ("user","assistant")]) or ""
     intent_rdv  = bool(INTENT_RDV_RE.search(text_window))
     consent     = bool(CONSENT_RE.search(user_input or ""))
 
-    # 3) Nettoyage du texte LLM
+    # 3) Nettoyage texte LLM
     response_text_llm, _ = extract_lead_json(llm_text or "")
     response_text_llm = re.sub(r"<\s*LEAD_?JSON\s*>.*?</\s*LEAD_?JSON\s*>", "", response_text_llm or "", flags=re.DOTALL|re.IGNORECASE).strip()
-
-    # 4) On reprend la main si LLM vague ou RDV détecté
     must_take_control = intent_rdv or not response_text_llm or (len(response_text_llm) < 6)
 
+    # Helper pour enchaîner proprement une question après le texte LLM
+    def llm_plus(q: str) -> str:
+        base = response_text_llm if response_text_llm else ""
+        txt = f"{base} {q}".strip()
+        return enforce_single_question(txt)
+
+    # 4) Contrôle (ordre = NOM → TÉLÉPHONE → EMAIL)
     if must_take_control:
         if not lead["name"]:
-            msg = "Très bien, je suis là pour vous aider. Pour commencer, quel est votre nom complet ?"
-            msg2 = "Je peux aussi transmettre vos informations pour vous proposer un rendez-vous. D’accord ?"
-            return enforce_single_question(f"{msg} {msg2}"), lead, consent, "collecting"
-        if not lead["email"]:
-            msg = "Merci. Quelle est votre adresse e-mail ?"
-            msg2 = "Souhaitez-vous que je transmette vos informations pour organiser un rendez-vous ?"
-            return enforce_single_question(f"{msg} {msg2}"), lead, consent, "collecting"
+            q = "Pour commencer, quel est votre nom et prénom complets ?"
+            return enforce_single_question(q), lead, consent, "collecting"
         if not lead["phone"]:
-            msg = "Et enfin, quel est votre numéro de téléphone ?"
-            msg2 = "Je peux transmettre vos informations pour un rendez-vous, d’accord ?"
-            return enforce_single_question(f"{msg} {msg2}"), lead, consent, "collecting"
-        msg = "Parfait, je transmets vos coordonnées pour vous proposer un rendez-vous."
-        return enforce_single_question(msg), {**lead, "stage":"ready"}, True, "ready"
+            q = "Merci. Quel est votre numéro de téléphone ?"
+            return enforce_single_question(q), lead, consent, "collecting"
+        if not lead["email"]:
+            q = "Parfait. Quelle est votre adresse e-mail ?"
+            return enforce_single_question(q), lead, consent, "collecting"
+        ok = "Parfait, je transmets vos coordonnées pour vous proposer un rendez-vous."
+        return enforce_single_question(ok), {**lead, "stage":"ready"}, True, "ready"
 
-    # 5) Sinon on garde la réponse LLM mais on injecte la question utile suivante
+    # 5) Sinon on conserve le LLM mais on impose la prochaine question manquante
     if not lead["name"]:
-        q = "Pour commencer, quel est votre nom complet ? Puis-je transmettre vos informations pour vous proposer un rendez-vous ?"
-        return enforce_single_question(f"{response_text_llm} {q}".strip()), lead, consent, "collecting"
-    if not lead["email"]:
-        q = "Merci. Quelle est votre adresse e-mail ? Souhaitez-vous que je transmette vos informations pour un rendez-vous ?"
-        return enforce_single_question(f"{response_text_llm} {q}".strip()), lead, consent, "collecting"
+        return llm_plus("Pour commencer, quel est votre nom et prénom complets ?"), lead, consent, "collecting"
     if not lead["phone"]:
-        q = "Quel est votre numéro de téléphone ? Je peux transmettre vos informations pour vous proposer un rendez-vous, d’accord ?"
-        return enforce_single_question(f"{response_text_llm} {q}".strip()), lead, consent, "collecting"
+        return llm_plus("Merci. Quel est votre numéro de téléphone ?"), lead, consent, "collecting"
+    if not lead["email"]:
+        return llm_plus("Parfait. Quelle est votre adresse e-mail ?"), lead, consent, "collecting"
 
     ok = "Parfait, je transmets vos coordonnées pour vous proposer un rendez-vous."
-    return enforce_single_question(f"{response_text_llm} {ok}".strip()), {**lead, "stage":"ready"}, True, "ready"
+    return enforce_single_question(ok), {**lead, "stage":"ready"}, True, "ready"
 
 def rule_based_next_question(pack: str, history: list) -> str:
     lead = _lead_from_history(history)
