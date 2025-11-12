@@ -119,7 +119,7 @@
 
 <body>
   <div class="container">
-    <!-- ✅ Logo corrigé : chemin direct dans /static -->
+    <!-- ✅ Logo inchangé -->
     <img src="{{ url_for('static', filename='logo-bettybots.png') }}" alt="Betty Bots logo" class="logo">
 
     <h1>Finalisez votre inscription</h1>
@@ -129,14 +129,60 @@
       (<strong>29,99 €/mois</strong> – sans engagement).
     </p>
 
-    <form method="post">
+    {# ✅ IMPORTANT : Rejouer la query-string au POST pour que request.args reste peuplé côté Python #}
+    <form
+      method="post"
+      action="{{ url_for('inscription_page') }}?pack={{ (request.args.get('pack') or '')|urlencode }}&color={{ (request.args.get('color') or '')|urlencode }}&avatar={{ (request.args.get('avatar') or '')|urlencode }}&greeting={{ (request.args.get('greeting') or '')|urlencode }}&contact={{ (request.args.get('contact') or request.args.get('contact_info') or '')|urlencode }}&px={{ (request.args.get('px') or '0')|urlencode }}&py={{ (request.args.get('py') or '0')|urlencode }}"
+      novalidate
+      id="inscription-form"
+    >
       <label for="email">Email professionnel</label>
-      <input type="email" id="email" name="email" required placeholder="exemple@votre-entreprise.com">
+      <input
+        type="email"
+        id="email"
+        name="email"
+        required
+        autocomplete="email"
+        placeholder="exemple@votre-entreprise.com"
+        inputmode="email"
+        value="{{ request.args.get('email','') }}"
+      >
       <button type="submit" class="btn">Valider et payer</button>
+
+      <!-- ✅ Filet de sécurité : on garde une copie côté client (jamais affichée) -->
+      <input type="hidden" id="email_mirror" name="email_mirror" value="">
     </form>
 
     <p class="footer">propulsé par <strong>Spectra Media AI</strong></p>
   </div>
+
+  <!-- ✅ Robuste : on normalise + on persiste l’email localement en secours -->
+  <script>
+    (function(){
+      const form  = document.getElementById('inscription-form');
+      const email = document.getElementById('email');
+      const mir   = document.getElementById('email_mirror');
+
+      // Pré-remplir depuis localStorage si retour navigateur
+      try {
+        const saved = localStorage.getItem('betty_last_email') || sessionStorage.getItem('betty_last_email') || '';
+        if (!email.value && saved) email.value = saved;
+      } catch(e) {}
+
+      form.addEventListener('submit', function(ev){
+        // Normalisation douce : trim
+        email.value = (email.value || '').trim();
+        // Miroir invisible
+        mir.value = email.value;
+
+        // Persistance locale (secours en cas de navigation/retour)
+        try {
+          localStorage.setItem('betty_last_email', email.value);
+          sessionStorage.setItem('betty_last_email', email.value);
+        } catch(e) {}
+      }, {passive:true});
+    })();
+  </script>
 </body>
 </html>
 {% endblock %}
