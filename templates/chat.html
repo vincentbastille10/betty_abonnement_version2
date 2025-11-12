@@ -100,29 +100,42 @@
   }
 
   async function send(){
-    const el = document.getElementById("input");
-    const text = el.value.trim();
-    if(!text) return;
-    addMsg(text, "user");
-    el.value = "";
-    try{
-      const resp = await fetch(apiUrl, {
-        method:"POST",
-        headers: {"Content-Type":"application/json"},
-        body: JSON.stringify({
-          message: text,
-          public_id: publicId,
-          conv_id: convId,     // 🧠 Mémoire persistante sans cookies
-          buyer_email: buyerEmail
-        })
-      });
-      const data = await resp.json();
-      addMsg(data.response || "Désolé, pas de réponse", "bot");
-    }catch(e){
-      addMsg("Erreur de connexion au serveur.", "bot");
-      console.error(e);
-    }
+  const el = document.getElementById("input");
+  const text = el.value.trim();
+  if(!text) return;
+  addMsg(text, "user");
+  el.value = "";
+
+  // 🧠 Message temporaire pendant le traitement
+  const thinkingMsg = document.createElement("div");
+  thinkingMsg.className = "msg bot";
+  thinkingMsg.textContent = "Betty réfléchit… 🤔";
+  box.appendChild(thinkingMsg);
+  box.scrollTop = box.scrollHeight;
+
+  try{
+    const resp = await fetch(apiUrl, {
+      method:"POST",
+      headers: {"Content-Type":"application/json"},
+      body: JSON.stringify({
+        message: text,
+        public_id: publicId,
+        conv_id: convId,
+        buyer_email: buyerEmail
+      })
+    });
+    const data = await resp.json();
+
+    // 💬 Remplace le message temporaire par la vraie réponse
+    thinkingMsg.remove();
+    addMsg(data.response || "Désolé, pas de réponse", "bot");
+  }catch(e){
+    thinkingMsg.remove();
+    addMsg("Erreur de connexion au serveur.", "bot");
+    console.error(e);
   }
+}
+
 
   document.getElementById("send").addEventListener("click", send);
   document.getElementById("input").addEventListener("keydown", (e)=>{ if(e.key==="Enter"){ send(); } });
