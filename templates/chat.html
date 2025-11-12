@@ -81,54 +81,61 @@
     </div>
   </div>
 
-  <script>
-    const publicId   = "{{ public_id }}";
-    const buyerEmail = "{{ buyer_email }}";
-    const apiUrl     = "/api/bettybot";
+<script>
+  const publicId   = "{{ public_id }}";
+  const buyerEmail = "{{ buyer_email }}";
+  const apiUrl     = "/api/bettybot";
 
-    const box = document.getElementById("messages");
-    function addMsg(text, cls="bot") {
-      const m = document.createElement("div");
-      m.className = "msg " + cls;
-      m.textContent = text;
-      box.appendChild(m);
-      box.scrollTop = box.scrollHeight; // scroll interne uniquement
+  // ✅ Génère un ID de conversation persistant (corrige le problème iframe)
+  const convId = sessionStorage.getItem("convId_" + publicId) || crypto.randomUUID();
+  sessionStorage.setItem("convId_" + publicId, convId);
+
+  const box = document.getElementById("messages");
+  function addMsg(text, cls="bot") {
+    const m = document.createElement("div");
+    m.className = "msg " + cls;
+    m.textContent = text;
+    box.appendChild(m);
+    box.scrollTop = box.scrollHeight;
+  }
+
+  async function send(){
+    const el = document.getElementById("input");
+    const text = el.value.trim();
+    if(!text) return;
+    addMsg(text, "user");
+    el.value = "";
+    try{
+      const resp = await fetch(apiUrl, {
+        method:"POST",
+        headers: {"Content-Type":"application/json"},
+        body: JSON.stringify({
+          message: text,
+          public_id: publicId,
+          conv_id: convId,     // 🧠 Mémoire persistante sans cookies
+          buyer_email: buyerEmail
+        })
+      });
+      const data = await resp.json();
+      addMsg(data.response || "Désolé, pas de réponse", "bot");
+    }catch(e){
+      addMsg("Erreur de connexion au serveur.", "bot");
+      console.error(e);
     }
+  }
 
-    async function send(){
-      const el = document.getElementById("input");
-      const text = el.value.trim();
-      if(!text) return;
-      addMsg(text, "user");
-      el.value = "";
-      try{
-        const resp = await fetch(apiUrl, {
-          method:"POST",
-          headers: {"Content-Type":"application/json"},
-          body: JSON.stringify({
-            message: text,
-            public_id: publicId,
-            buyer_email: buyerEmail   // transmis au back, jamais affiché
-          })
-        });
-        const data = await resp.json();
-        addMsg(data.response || "Désolé, pas de réponse", "bot");
-      }catch(e){
-        addMsg("Erreur de connexion au serveur.", "bot");
-        console.error(e);
-      }
-    }
+  document.getElementById("send").addEventListener("click", send);
+  document.getElementById("input").addEventListener("keydown", (e)=>{ if(e.key==="Enter"){ send(); } });
 
-    document.getElementById("send").addEventListener("click", send);
-    document.getElementById("input").addEventListener("keydown", (e)=>{ if(e.key==="Enter"){ send(); } });
+  // Message d’accueil
+  addMsg("Bonjour. Je suis votre assistante. Comment puis-je aider ?", "bot");
 
-    // Message de bienvenue
-    addMsg("Bonjour. Je suis votre assistante. Comment puis-je aider ?", "bot");
+  // 🚫 Empêche les scrolls parent en iframe
+  if (window.parent !== window) {
+    document.body.style.overflow = "hidden";
+    window.addEventListener("resize", () => { document.body.style.overflow = "hidden"; });
+  }
+</script>
 
-    // Si intégré en iframe, neutralise le scroll parent
-    if (window.parent !== window) {
-      document.body.style.overflow = "hidden";
-    }
-  </script>
 </body>
 </html>
