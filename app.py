@@ -237,11 +237,11 @@ def build_system_prompt(pack_name: str, profile: dict, greeting: str = "") -> st
     guide = """
 RÈGLES OBLIGATOIRES (communes à TOUS les métiers) :
 - Style : clair, 1 à 2 phrases max par message. Une seule question à la fois.
-- Après 1–2 phrases de mise en contexte maximum, collecte IMMÉDIATEMENT :
-  1) « Quel est votre numéro de téléphone ? »
-  2) « Quel est votre nom et prénom complets ? »
+- Après 1–2 phrases de mise en contexte maximum, collecte IMMÉDIATEMENT dans cet ordre :
+  1) « Quel est votre nom et prénom complets ? »
+  2) « Quel est votre numéro de téléphone ? »
   3) « Quelle est votre adresse e-mail ? »
-- Dès que téléphone + nom complet + e-mail sont collectés, écris : 
+- Dès que téléphone + nom complet + e-mail sont collectés, écris :
   « Parfait, je transmets vos coordonnées. Vous serez rappelé rapidement. »
 - N’affiche jamais de variables (pas de {{...}}) ni de JSON à l’écran.
 
@@ -249,9 +249,10 @@ BALISE TECHNIQUE (dernière ligne, une seule ligne, sans markdown) :
 <LEAD_JSON>{"reason":"", "name":"", "email":"", "phone":"", "availability":"", "stage":"collecting|ready"}</LEAD_JSON>
 
 RAPPEL :
-- Le JSON doit tenir sur UNE ligne. 
+- Le JSON doit tenir sur UNE ligne.
 - Passe "stage" à "ready" UNIQUEMENT quand téléphone + nom complet + email sont présents (peu importe le métier).
 """
+
     greet = f"\nMessage d'accueil recommandé : {greeting}\n" if greeting else ""
     return f"{base}\n{biz}\n{guide}\n{greet}"
 
