@@ -1,7 +1,24 @@
 {% extends "base.html" %}
 {% block content %}
 
-<h1>Découvrez Betty Bot</h1>
+{# Masque le titre "✨ Betty Bots" qui vient du layout de base #}
+<style>
+  header h1:first-child {
+    display: none;
+  }
+</style>
+
+<!-- Bandeau logos Spectra Media + Betty Bots -->
+<div style="display:flex;justify-content:center;align-items:center;gap:32px;margin:24px 0 8px;">
+  <img src="{{ url_for('static', filename='lspectra_media_logo.png') }}"
+       alt="Spectra Media"
+       style="height:64px;object-fit:contain;">
+  <img src="{{ url_for('static', filename='logo-bettybots.png') }}"
+       alt="Betty Bots"
+       style="height:64px;object-fit:contain;">
+</div>
+
+<h1>Découvrez Betty Bots</h1>
 <p class="intro">
   Le chatbot métier intelligent nouvelle génération qui <strong>récupère vos clients 24/7</strong> avec une <strong>IA spécialisée</strong>.
   Intégration en <strong>2 minutes</strong> sur votre site. Gagnez du temps, ne ratez plus d’opportunités.
@@ -29,7 +46,7 @@
   <div>✓ Résiliation possible à tout moment</div>
 </div>
 
-<!-- Logos supprimés (ancien bloc "Déjà utilisé par") -->
+<!-- Logos "déjà utilisé par" supprimés -->
 
 <!-- Points clés -->
 <div class="features">
@@ -278,7 +295,7 @@
     }
   });
 
-  // IMPORTANT : on force le focus visuel en haut de la page
+  // On force le focus visuel en haut de la page au chargement
   window.addEventListener('load', ()=>{
     window.scrollTo(0, 0);
   });
