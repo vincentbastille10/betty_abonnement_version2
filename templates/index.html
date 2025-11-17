@@ -1,21 +1,21 @@
 {% extends "base.html" %}
 {% block content %}
 
-{# Masque le titre "✨ Betty Bots" qui vient du layout de base #}
+{# Masque le titre "✨ Betty Bots" qui vient éventuellement du layout de base #}
 <style>
   header h1:first-child {
     display: none;
   }
 </style>
 
-<!-- Bandeau logos Spectra Media + Betty Bots -->
-<div style="display:flex;justify-content:center;align-items:center;gap:32px;margin:24px 0 8px;">
-  <img src="{{ url_for('static', filename='lspectra_media_logo.png') }}"
+<!-- Bandeau logos Spectra Media + Betty Bots (version large) -->
+<div style="display:flex;justify-content:center;align-items:center;gap:40px;margin:24px 0 8px;">
+  <img src="{{ url_for('static', filename='spectra_media_logo.png') }}"
        alt="Spectra Media"
-       style="height:64px;object-fit:contain;">
+       style="height:120px;object-fit:contain;">
   <img src="{{ url_for('static', filename='logo-bettybots.png') }}"
        alt="Betty Bots"
-       style="height:64px;object-fit:contain;">
+       style="height:120px;object-fit:contain;">
 </div>
 
 <h1>Découvrez Betty Bots</h1>
@@ -24,9 +24,11 @@
   Intégration en <strong>2 minutes</strong> sur votre site. Gagnez du temps, ne ratez plus d’opportunités.
 </p>
 
-<div class="hero-cta" style="text-align:center;">
+<!-- Bloc CTA : colonne centrée -->
+<div class="hero-cta"
+     style="display:flex;flex-direction:column;align-items:center;gap:10px;margin-top:4px;">
 
-  <p class="trial-note" style="max-width:520px;margin:0 auto 12px;text-align:center;font-size:15px;opacity:.88;">
+  <p class="trial-note" style="max-width:520px;margin:0;text-align:center;font-size:15px;opacity:.88;">
     Aucun risque : testez Betty pendant <strong>7 jours gratuitement</strong>, puis décidez si vous souhaitez continuer.
   </p>
 
@@ -45,8 +47,6 @@
   <div>✓ Données traitées en toute confidentialité</div>
   <div>✓ Résiliation possible à tout moment</div>
 </div>
-
-<!-- Logos "déjà utilisé par" supprimés -->
 
 <!-- Points clés -->
 <div class="features">
@@ -202,7 +202,7 @@
   const form     = document.getElementById('form');
   const input    = document.getElementById('input');
 
-  // Focus intelligent : taper n'importe où = focus sur l'input (mais pas de scroll auto au chargement)
+  // Focus intelligent : taper n'importe où = focus sur l'input (sans autofocus initial)
   document.addEventListener('keydown', (e) => {
     const ign = ['Enter','Escape','Tab'];
     if (ign.includes(e.key)) return;
@@ -282,8 +282,8 @@
       const j = await r.json();
       // Nettoyage robuste du tag technique (avec ou sans </LEAD_JSON>)
       const cleaned = String(j.response ?? "")
-        .replace(/\s*<LEAD_JSON>[\s\S]*?(?:<\/LEAD_JSON>|$)/g, "") // supprime tout le JSON technique
-        .replace(/```[\s\S]*?```/g, "")                            // supprime les blocs ``` éventuels
+        .replace(/\s*<LEAD_JSON>[\s\S]*?(?:<\/LEAD_JSON>|$)/g, "")
+        .replace(/```[\s\S]*?```/g, "")
         .trim();
 
       addBubble(cleaned || "Désolé, une erreur est survenue.");
@@ -295,9 +295,10 @@
     }
   });
 
-  // On force le focus visuel en haut de la page au chargement
+  // On force le focus visuel en haut de la page au chargement ET après 2 secondes
   window.addEventListener('load', ()=>{
     window.scrollTo(0, 0);
+    setTimeout(()=>window.scrollTo(0, 0), 2000);
   });
 </script>
 
