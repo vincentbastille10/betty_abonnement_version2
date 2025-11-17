@@ -7,7 +7,7 @@
   Intégration en <strong>2 minutes</strong> sur votre site. Gagnez du temps, ne ratez plus d’opportunités.
 </p>
 
-<div class="hero-cta">
+<div class="hero-cta" style="text-align:center;">
 
   <p class="trial-note" style="max-width:520px;margin:0 auto 12px;text-align:center;font-size:15px;opacity:.88;">
     Aucun risque : testez Betty pendant <strong>7 jours gratuitement</strong>, puis décidez si vous souhaitez continuer.
@@ -15,7 +15,8 @@
 
   <!-- Bouton essai gratuit 7 jours -> va vers la page de configuration -->
   <a href="{{ url_for('config_page') }}"
-     class="btn primary big">
+     class="btn primary big"
+     style="display:inline-block;margin:0 auto;">
     Essayer Betty 7 jours gratuitement
   </a>
 
@@ -167,8 +168,8 @@
   Profitez de <strong>7 jours d’essai gratuit</strong> avant de vous engager.
 </p>
 
-<div class="hero-cta" style="margin-top:24px">
-  <a href="{{ url_for('config_page') }}" class="btn primary big">Je crée mon bot maintenant</a>
+<div class="hero-cta" style="margin-top:24px;text-align:center;">
+  <a href="{{ url_for('config_page') }}" class="btn primary big" style="display:inline-block;margin:0 auto;">Je crée mon bot maintenant</a>
 </div>
 <div style="text-align:center;font-size:13px;opacity:.7;margin-top:4px;">
   Paiement sécurisé Stripe • Sans engagement • Annulable en 1 clic
@@ -184,7 +185,7 @@
   const form     = document.getElementById('form');
   const input    = document.getElementById('input');
 
-  // Focus intelligent : taper n'importe où = focus sur l'input (sans scroll automatique sur la démo)
+  // Focus intelligent : taper n'importe où = focus sur l'input (mais pas de scroll auto au chargement)
   document.addEventListener('keydown', (e) => {
     const ign = ['Enter','Escape','Tab'];
     if (ign.includes(e.key)) return;
@@ -277,9 +278,9 @@
     }
   });
 
-  // On ne force plus le focus sur l'input au chargement pour garder le focus visuel en haut de page
+  // IMPORTANT : on force le focus visuel en haut de la page
   window.addEventListener('load', ()=>{
-    scrollToBottom();
+    window.scrollTo(0, 0);
   });
 </script>
 
