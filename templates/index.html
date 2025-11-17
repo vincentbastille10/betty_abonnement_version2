@@ -3,7 +3,7 @@
 
 <h1>Découvrez Betty Bot</h1>
 <p class="intro">
-  Le chatbot métier qui <strong>qualifie vos leads 24/7</strong> avec une <strong>IA spécialisée</strong>.
+  Le chatbot métier intelligent nouvelle génération qui <strong>récupère vos clients 24/7</strong> avec une <strong>IA spécialisée</strong>.
   Intégration en <strong>2 minutes</strong> sur votre site. Gagnez du temps, ne ratez plus d’opportunités.
 </p>
 
@@ -13,7 +13,7 @@
     Aucun risque : testez Betty pendant <strong>7 jours gratuitement</strong>, puis décidez si vous souhaitez continuer.
   </p>
 
-  <!-- Nouveau bouton : essai gratuit 7 jours -->
+  <!-- Bouton essai gratuit 7 jours -> va vers la page de configuration -->
   <a href="{{ url_for('config_page') }}"
      class="btn primary big">
     Essayer Betty 7 jours gratuitement
@@ -28,13 +28,7 @@
   <div>✓ Résiliation possible à tout moment</div>
 </div>
 
-<!-- Logos (optionnels) -->
-<div class="logos">
-  <span class="logos-label">Déjà utilisé par&nbsp;</span>
-  <img src="{{ url_for('static', filename='avocat.jpg') }}" onerror="this.style.display='none'">
-  <img src="{{ url_for('static', filename='medecin.jpg') }}" onerror="this.style.display='none'">
-  <img src="{{ url_for('static', filename='immo.jpg') }}" onerror="this.style.display='none'">
-</div>
+<!-- Logos supprimés (ancien bloc "Déjà utilisé par") -->
 
 <!-- Points clés -->
 <div class="features">
@@ -163,7 +157,7 @@
     </div>
 
     <form id="form" style="padding:14px;border-top:1px solid var(--border);display:flex;gap:8px">
-      <input id="input" type="text" placeholder="Écrivez et appuyez sur Entrée…" autocomplete="off" autofocus
+      <input id="input" type="text" placeholder="Écrivez et appuyez sur Entrée…" autocomplete="off"
              style="background:#0b0f14;border:1px solid var(--border);border-radius:10px;color:var(--text);padding:12px;flex:1">
       <button class="btn" type="submit">Envoyer</button>
     </form>
@@ -190,7 +184,7 @@
   const form     = document.getElementById('form');
   const input    = document.getElementById('input');
 
-  // Focus intelligent : taper n'importe où = focus sur l'input
+  // Focus intelligent : taper n'importe où = focus sur l'input (sans scroll automatique sur la démo)
   document.addEventListener('keydown', (e) => {
     const ign = ['Enter','Escape','Tab'];
     if (ign.includes(e.key)) return;
@@ -270,12 +264,12 @@
       const j = await r.json();
       // Nettoyage robuste du tag technique (avec ou sans </LEAD_JSON>)
       const cleaned = String(j.response ?? "")
-      .replace(/\s*<LEAD_JSON>[\s\S]*?(?:<\/LEAD_JSON>|$)/g, "") // supprime tout le JSON technique
-      .replace(/```[\s\S]*?```/g, "")                            // supprime les blocs ``` éventuels
-      .trim();
+        .replace(/\s*<LEAD_JSON>[\s\S]*?(?:<\/LEAD_JSON>|$)/g, "") // supprime tout le JSON technique
+        .replace(/```[\s\S]*?```/g, "")                            // supprime les blocs ``` éventuels
+        .trim();
 
       addBubble(cleaned || "Désolé, une erreur est survenue.");
-
+      hideTyping(typing);
 
     } catch {
       hideTyping(typing);
@@ -283,7 +277,10 @@
     }
   });
 
-  window.addEventListener('load', ()=>{ input.focus(); scrollToBottom(); });
+  // On ne force plus le focus sur l'input au chargement pour garder le focus visuel en haut de page
+  window.addEventListener('load', ()=>{
+    scrollToBottom();
+  });
 </script>
 
 {% endblock %}
