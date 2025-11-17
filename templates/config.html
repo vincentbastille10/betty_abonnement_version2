@@ -29,6 +29,38 @@
   .selected-metier-label strong {
     color: #ffffff;
   }
+
+  /* Bloc avatar sélectionné + légende */
+  .selected-metier-avatar {
+    margin-top: 0.4rem;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.75rem;
+    font-size: 0.85rem;
+    color: #e5e7eb;
+  }
+  .selected-metier-avatar img.avatar-preview-img {
+    width: 52px;
+    height: 52px;
+    border-radius: 999px;
+    object-fit: cover;
+    border: 1px solid #4F46E5;
+    background: #020617;
+  }
+  .selected-metier-avatar-text {
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+  }
+  .selected-metier-avatar-text span {
+    font-weight: 500;
+    color: #e5e7eb;
+  }
+  .selected-metier-avatar-text small {
+    font-size: 0.75rem;
+    color: #9ca3af;
+  }
+
   .drawer-panel {
     margin-top: 0.75rem;
     padding: 0.75rem;
@@ -110,6 +142,18 @@
       <p id="metier-selected-label" class="selected-metier-label">
         Métier sélectionné : <strong>Avocat</strong>. Continuez la configuration de votre bot.
       </p>
+
+      <!-- Aperçu avatar + légende -->
+      <div class="selected-metier-avatar">
+        <img id="avatar-preview"
+             src="{{ url_for('static', filename='avocat.jpg') }}"
+             alt="Avatar sélectionné"
+             class="avatar-preview-img">
+        <div class="selected-metier-avatar-text">
+          <span>Avatar sélectionné</span>
+          <small>Ce sera la photo utilisée dans votre Chatbot intelligent Betty.</small>
+        </div>
+      </div>
 
       <div class="drawer-panel" id="drawer-panel" hidden>
         <p class="hint">Cliquez sur votre métier pour charger l’avatar et le pack correspondant.</p>
@@ -403,6 +447,8 @@ Horaires : Lun–Ven 9h–12h / 14h–18h"></textarea>
 
 <script>
   // ====== Pack <-> Avatar : synchro 100% fiable ======
+  const AVATAR_BASE = "{{ url_for('static', filename='') }}";
+
   const packRadios   = document.querySelectorAll('input[type="radio"][name="pack"]');
   const avatarHidden = document.getElementById('avatar-hidden');
   const cards        = document.querySelectorAll('.avatar-card');
@@ -430,6 +476,12 @@ Horaires : Lun–Ven 9h–12h / 14h–18h"></textarea>
   function applySelection(radio){
     const file = radio.getAttribute('data-avatar') || 'avocat.jpg';
     avatarHidden.value = file;
+
+    // met à jour l’aperçu avatar
+    const preview = document.getElementById('avatar-preview');
+    if (preview) {
+      preview.src = AVATAR_BASE + file;
+    }
 
     cards.forEach(c => c.classList.remove('selected'));
     const card = radio.closest('.avatar-card');
@@ -494,7 +546,7 @@ Horaires : Lun–Ven 9h–12h / 14h–18h"></textarea>
       drawerChips.forEach(c => c.classList.remove('active'));
       chip.classList.add('active');
 
-      // on peut refermer le tiroir si tu veux que ce soit plus fluide
+      // on referme le tiroir pour un flow plus fluide
       drawerPanel.setAttribute('hidden', 'hidden');
       drawerToggle.classList.remove('open');
     });
