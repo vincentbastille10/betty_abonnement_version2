@@ -37,6 +37,55 @@
 
     <!-- 🔒 Un SEUL avatar envoyé au back -->
     <input type="hidden" name="avatar" id="avatar-hidden" value="avocat.jpg">
+
+    <!-- ===== TIROIR METIER ===== -->
+    <div class="metier-drawer">
+      <button type="button" class="drawer-toggle" id="drawer-toggle">
+        Plus de métiers : faites dérouler le menu
+      </button>
+
+      <div class="drawer-panel" id="drawer-panel" hidden>
+        <!-- radio caché qui portera le pack choisi dans le tiroir -->
+        <input type="radio" name="pack" id="drawer-pack-radio" value="" data-avatar="" style="display:none">
+
+        <p class="hint">Cliquez sur votre métier pour charger l’avatar et le pack correspondant.</p>
+        <ul class="drawer-list">
+          <!-- Liste alphabétique des packs betty_... -->
+          <li class="drawer-item" data-pack="betty_aide_a_dom"            data-avatar="Betty_aide_a_dom.png">betty_aide_a_dom</li>
+          <li class="drawer-item" data-pack="betty_aide_a_domicile"      data-avatar="Betty_aide_a_domicile.png">betty_aide_a_domicile</li>
+          <li class="drawer-item" data-pack="betty_architecte"           data-avatar="Betty_architecte.png">betty_architecte</li>
+          <li class="drawer-item" data-pack="betty_artisan"              data-avatar="Betty_artisan.png">betty_artisan</li>
+          <li class="drawer-item" data-pack="betty_assistance_scolaire"  data-avatar="Betty_assistance_scolaire.png">betty_assistance_scolaire</li>
+          <li class="drawer-item" data-pack="betty_assurance"            data-avatar="Betty_assurance.png">betty_assurance</li>
+          <li class="drawer-item" data-pack="betty_coach"                data-avatar="Betty_coach.png">betty_coach</li>
+          <li class="drawer-item" data-pack="betty_coiffeur"             data-avatar="Betty_coiffeur.png">betty_coiffeur</li>
+          <li class="drawer-item" data-pack="betty_dentiste"             data-avatar="Betty_dentiste.png">betty_dentiste</li>
+          <li class="drawer-item" data-pack="betty_dj"                   data-avatar="Betty_DJ.png">betty_dj</li>
+          <li class="drawer-item" data-pack="betty_estheticienne"        data-avatar="Betty_estheticienne.png">betty_estheticienne</li>
+          <li class="drawer-item" data-pack="betty_garde_denfant"        data-avatar="Betty_garde_denfant.png">betty_garde_denfant</li>
+          <li class="drawer-item" data-pack="betty_graphiste"            data-avatar="Betty_graphiste.png">betty_graphiste</li>
+          <li class="drawer-item" data-pack="betty_infirmiere"           data-avatar="Betty_infirmiere.png">betty_infirmiere</li>
+          <li class="drawer-item" data-pack="betty_kine"                 data-avatar="Betty_kine.png">betty_kine</li>
+          <li class="drawer-item" data-pack="betty_marketing"            data-avatar="Betty_marketing.png">betty_marketing</li>
+          <li class="drawer-item" data-pack="betty_mecano"               data-avatar="Betty_mecano.png">betty_mecano</li>
+          <li class="drawer-item" data-pack="betty_menage"               data-avatar="Betty_menage.png">betty_menage</li>
+          <li class="drawer-item" data-pack="betty_nutritioniste"        data-avatar="Betty_nutritioniste.png">betty_nutritioniste</li>
+          <li class="drawer-item" data-pack="betty_osteopate"            data-avatar="Betty_osteopate.png">betty_osteopate</li>
+          <li class="drawer-item" data-pack="betty_paysagiste"           data-avatar="Betty_paysagiste.png">betty_paysagiste</li>
+          <li class="drawer-item" data-pack="betty_photographe"          data-avatar="Betty_photographe.png">betty_photographe</li>
+          <li class="drawer-item" data-pack="betty_plombier"             data-avatar="Betty_plombier.png">betty_plombier</li>
+          <li class="drawer-item" data-pack="betty_serrurier"            data-avatar="Betty_serrurier.png">betty_serrurier</li>
+          <li class="drawer-item" data-pack="betty_sophrologue"          data-avatar="Betty_sophrologue.png">betty_sophrologue</li>
+          <li class="drawer-item" data-pack="betty_soutien_scolaire"     data-avatar="Betty_soutien_scolaire.png">betty_soutien_scolaire</li>
+          <li class="drawer-item" data-pack="betty_trader"               data-avatar="Betty_trader.png">betty_trader</li>
+          <li class="drawer-item" data-pack="betty_traiteur"             data-avatar="Betty_traiteur.png">betty_traiteur</li>
+          <li class="drawer-item" data-pack="betty_verrier"              data-avatar="Betty_verrier.png">betty_verrier</li>
+          <li class="drawer-item" data-pack="betty_yoga"                 data-avatar="Betty_yoga.png">betty_yoga</li>
+        </ul>
+      </div>
+    </div>
+    <!-- ===== /TIROIR METIER ===== -->
+
   </section>
 
   <!-- Couleurs -->
@@ -128,10 +177,9 @@ Horaires : Lun–Ven 9h–12h / 14h–18h"></textarea>
     if (checked) applySelection(checked);
   });
 
-  // Changement de pack
+  // Changement de pack (avatars principaux)
   packRadios.forEach(r => {
     r.addEventListener('change', () => applySelection(r));
-    // Support clic sur toute la carte (label)
     const card = r.closest('.avatar-card');
     if(card){
       card.addEventListener('click', () => {
@@ -139,6 +187,49 @@ Horaires : Lun–Ven 9h–12h / 14h–18h"></textarea>
         applySelection(r);
       });
     }
+  });
+
+  // ====== TIROIR METIER ======
+  const drawerToggle   = document.getElementById('drawer-toggle');
+  const drawerPanel    = document.getElementById('drawer-panel');
+  const drawerRadio    = document.getElementById('drawer-pack-radio');
+  const drawerItems    = document.querySelectorAll('.drawer-item');
+
+  if (drawerToggle && drawerPanel) {
+    drawerToggle.addEventListener('click', () => {
+      const isHidden = drawerPanel.hasAttribute('hidden');
+      if (isHidden) {
+        drawerPanel.removeAttribute('hidden');
+      } else {
+        drawerPanel.setAttribute('hidden', 'hidden');
+      }
+      drawerToggle.classList.toggle('open');
+    });
+  }
+
+  drawerItems.forEach(item => {
+    item.addEventListener('click', () => {
+      const pack   = item.dataset.pack;
+      const avatar = item.dataset.avatar;
+
+      // on met à jour le radio caché
+      drawerRadio.value = pack;
+      drawerRadio.setAttribute('data-avatar', avatar);
+      drawerRadio.checked = true;
+
+      // on applique la sélection (met à jour le hidden avatar + surbrillance)
+      applySelection(drawerRadio);
+
+      // état visuel dans la liste
+      drawerItems.forEach(i => i.classList.remove('active'));
+      item.classList.add('active');
+
+      // on peut refermer le tiroir pour simplifier
+      if (drawerPanel) {
+        drawerPanel.setAttribute('hidden', 'hidden');
+        drawerToggle.classList.remove('open');
+      }
+    });
   });
 
   // ====== Joystick 2D ======
