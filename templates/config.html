@@ -1,6 +1,67 @@
 {% extends "base.html" %}
 {% block content %}
 
+<style>
+  .metier-drawer {
+    margin-top: 1rem;
+  }
+  .drawer-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.5rem 1rem;
+    border-radius: 999px;
+    border: 1px solid #4F46E5;
+    background: #0f172a;
+    color: #e5e7eb;
+    font-size: 0.9rem;
+    cursor: pointer;
+  }
+  .drawer-toggle.open {
+    background: #4F46E5;
+    color: #ffffff;
+  }
+  .selected-metier-label {
+    margin-top: 0.5rem;
+    font-size: 0.85rem;
+    color: #e5e7eb;
+  }
+  .selected-metier-label strong {
+    color: #ffffff;
+  }
+  .drawer-panel {
+    margin-top: 0.75rem;
+    padding: 0.75rem;
+    border-radius: 0.75rem;
+    background: #020617;
+    border: 1px solid #1f2937;
+  }
+  .drawer-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+  .drawer-chip {
+    border-radius: 999px;
+    padding: 0.4rem 0.9rem;
+    border: 1px solid #4b5563;
+    background: #0b1120;
+    color: #e5e7eb;
+    font-size: 0.85rem;
+    cursor: pointer;
+    transition: background 0.15s ease, border-color 0.15s ease, transform 0.05s ease;
+  }
+  .drawer-chip:hover {
+    border-color: #4F46E5;
+    transform: translateY(-1px);
+  }
+  .drawer-chip.active {
+    border-color: #4F46E5;
+    background: #4F46E5;
+    color: #ffffff;
+  }
+</style>
+
 <h1>Configurer votre chatbot</h1>
 <p class="intro">Choisissez un métier, une couleur, ajustez la personnalité et personnalisez le message d’accueil.</p>
 
@@ -9,6 +70,8 @@
   <!-- Métier / Avatar -->
   <section class="card">
     <h2>Métier</h2>
+    <p class="hint">Sélectionnez un avatar principal ou ouvrez le tiroir pour accéder à tous les métiers Betty.</p>
+
     <div class="avatar-grid">
 
       <!-- Avocat -->
@@ -44,44 +107,228 @@
         Plus de métiers : faites dérouler le menu
       </button>
 
+      <p id="metier-selected-label" class="selected-metier-label">
+        Métier sélectionné : <strong>Avocat</strong>. Continuez la configuration de votre bot.
+      </p>
+
       <div class="drawer-panel" id="drawer-panel" hidden>
+        <p class="hint">Cliquez sur votre métier pour charger l’avatar et le pack correspondant.</p>
+
         <!-- radio caché qui portera le pack choisi dans le tiroir -->
         <input type="radio" name="pack" id="drawer-pack-radio" value="" data-avatar="" style="display:none">
 
-        <p class="hint">Cliquez sur votre métier pour charger l’avatar et le pack correspondant.</p>
-        <ul class="drawer-list">
-          <!-- Liste alphabétique des packs betty_... -->
-          <li class="drawer-item" data-pack="betty_aide_a_dom"            data-avatar="Betty_aide_a_dom.png">betty_aide_a_dom</li>
-          <li class="drawer-item" data-pack="betty_aide_a_domicile"      data-avatar="Betty_aide_a_domicile.png">betty_aide_a_domicile</li>
-          <li class="drawer-item" data-pack="betty_architecte"           data-avatar="Betty_architecte.png">betty_architecte</li>
-          <li class="drawer-item" data-pack="betty_artisan"              data-avatar="Betty_artisan.png">betty_artisan</li>
-          <li class="drawer-item" data-pack="betty_assistance_scolaire"  data-avatar="Betty_assistance_scolaire.png">betty_assistance_scolaire</li>
-          <li class="drawer-item" data-pack="betty_assurance"            data-avatar="Betty_assurance.png">betty_assurance</li>
-          <li class="drawer-item" data-pack="betty_coach"                data-avatar="Betty_coach.png">betty_coach</li>
-          <li class="drawer-item" data-pack="betty_coiffeur"             data-avatar="Betty_coiffeur.png">betty_coiffeur</li>
-          <li class="drawer-item" data-pack="betty_dentiste"             data-avatar="Betty_dentiste.png">betty_dentiste</li>
-          <li class="drawer-item" data-pack="betty_dj"                   data-avatar="Betty_DJ.png">betty_dj</li>
-          <li class="drawer-item" data-pack="betty_estheticienne"        data-avatar="Betty_estheticienne.png">betty_estheticienne</li>
-          <li class="drawer-item" data-pack="betty_garde_denfant"        data-avatar="Betty_garde_denfant.png">betty_garde_denfant</li>
-          <li class="drawer-item" data-pack="betty_graphiste"            data-avatar="Betty_graphiste.png">betty_graphiste</li>
-          <li class="drawer-item" data-pack="betty_infirmiere"           data-avatar="Betty_infirmiere.png">betty_infirmiere</li>
-          <li class="drawer-item" data-pack="betty_kine"                 data-avatar="Betty_kine.png">betty_kine</li>
-          <li class="drawer-item" data-pack="betty_marketing"            data-avatar="Betty_marketing.png">betty_marketing</li>
-          <li class="drawer-item" data-pack="betty_mecano"               data-avatar="Betty_mecano.png">betty_mecano</li>
-          <li class="drawer-item" data-pack="betty_menage"               data-avatar="Betty_menage.png">betty_menage</li>
-          <li class="drawer-item" data-pack="betty_nutritioniste"        data-avatar="Betty_nutritioniste.png">betty_nutritioniste</li>
-          <li class="drawer-item" data-pack="betty_osteopate"            data-avatar="Betty_osteopate.png">betty_osteopate</li>
-          <li class="drawer-item" data-pack="betty_paysagiste"           data-avatar="Betty_paysagiste.png">betty_paysagiste</li>
-          <li class="drawer-item" data-pack="betty_photographe"          data-avatar="Betty_photographe.png">betty_photographe</li>
-          <li class="drawer-item" data-pack="betty_plombier"             data-avatar="Betty_plombier.png">betty_plombier</li>
-          <li class="drawer-item" data-pack="betty_serrurier"            data-avatar="Betty_serrurier.png">betty_serrurier</li>
-          <li class="drawer-item" data-pack="betty_sophrologue"          data-avatar="Betty_sophrologue.png">betty_sophrologue</li>
-          <li class="drawer-item" data-pack="betty_soutien_scolaire"     data-avatar="Betty_soutien_scolaire.png">betty_soutien_scolaire</li>
-          <li class="drawer-item" data-pack="betty_trader"               data-avatar="Betty_trader.png">betty_trader</li>
-          <li class="drawer-item" data-pack="betty_traiteur"             data-avatar="Betty_traiteur.png">betty_traiteur</li>
-          <li class="drawer-item" data-pack="betty_verrier"              data-avatar="Betty_verrier.png">betty_verrier</li>
-          <li class="drawer-item" data-pack="betty_yoga"                 data-avatar="Betty_yoga.png">betty_yoga</li>
-        </ul>
+        <div class="drawer-grid">
+          <!-- ordre alphabétique sur le label humain -->
+          <button type="button" class="drawer-chip"
+                  data-pack="betty_aide_a_domicile"
+                  data-avatar="Betty_aide_a_domicile.png"
+                  data-label="Aide à domicile">
+            Aide à domicile
+          </button>
+
+          <button type="button" class="drawer-chip"
+                  data-pack="betty_aide_a_dom"
+                  data-avatar="Betty_aide_a_dom.png"
+                  data-label="Aide à domicile (rapide)">
+            Aide à domicile (rapide)
+          </button>
+
+          <button type="button" class="drawer-chip"
+                  data-pack="betty_architecte"
+                  data-avatar="Betty_architecte.png"
+                  data-label="Architecte">
+            Architecte
+          </button>
+
+          <button type="button" class="drawer-chip"
+                  data-pack="betty_artisan"
+                  data-avatar="Betty_artisan.png"
+                  data-label="Artisan">
+            Artisan
+          </button>
+
+          <button type="button" class="drawer-chip"
+                  data-pack="betty_assistance_scolaire"
+                  data-avatar="Betty_assistance_scolaire.png"
+                  data-label="Assistance scolaire">
+            Assistance scolaire
+          </button>
+
+          <button type="button" class="drawer-chip"
+                  data-pack="betty_assurance"
+                  data-avatar="Betty_assurance.png"
+                  data-label="Assurance">
+            Assurance
+          </button>
+
+          <button type="button" class="drawer-chip"
+                  data-pack="betty_coach"
+                  data-avatar="Betty_coach.png"
+                  data-label="Coach">
+            Coach
+          </button>
+
+          <button type="button" class="drawer-chip"
+                  data-pack="betty_coiffeur"
+                  data-avatar="Betty_coiffeur.png"
+                  data-label="Coiffeur">
+            Coiffeur
+          </button>
+
+          <button type="button" class="drawer-chip"
+                  data-pack="betty_dentiste"
+                  data-avatar="Betty_dentiste.png"
+                  data-label="Dentiste">
+            Dentiste
+          </button>
+
+          <button type="button" class="drawer-chip"
+                  data-pack="betty_dj"
+                  data-avatar="Betty_DJ.png"
+                  data-label="DJ">
+            DJ
+          </button>
+
+          <button type="button" class="drawer-chip"
+                  data-pack="betty_estheticienne"
+                  data-avatar="Betty_estheticienne.png"
+                  data-label="Esthéticienne">
+            Esthéticienne
+          </button>
+
+          <button type="button" class="drawer-chip"
+                  data-pack="betty_garde_denfant"
+                  data-avatar="Betty_garde_denfant.png"
+                  data-label="Garde d’enfant">
+            Garde d’enfant
+          </button>
+
+          <button type="button" class="drawer-chip"
+                  data-pack="betty_graphiste"
+                  data-avatar="Betty_graphiste.png"
+                  data-label="Graphiste">
+            Graphiste
+          </button>
+
+          <button type="button" class="drawer-chip"
+                  data-pack="betty_infirmiere"
+                  data-avatar="Betty_infirmiere.png"
+                  data-label="Infirmière">
+            Infirmière
+          </button>
+
+          <button type="button" class="drawer-chip"
+                  data-pack="betty_kine"
+                  data-avatar="Betty_kine.png"
+                  data-label="Kiné">
+            Kiné
+          </button>
+
+          <button type="button" class="drawer-chip"
+                  data-pack="betty_marketing"
+                  data-avatar="Betty_marketing.png"
+                  data-label="Marketing">
+            Marketing
+          </button>
+
+          <button type="button" class="drawer-chip"
+                  data-pack="betty_mecano"
+                  data-avatar="Betty_mecano.png"
+                  data-label="Mécano">
+            Mécano
+          </button>
+
+          <button type="button" class="drawer-chip"
+                  data-pack="betty_menage"
+                  data-avatar="Betty_menage.png"
+                  data-label="Ménage">
+            Ménage
+          </button>
+
+          <button type="button" class="drawer-chip"
+                  data-pack="betty_nutritioniste"
+                  data-avatar="Betty_nutritioniste.png"
+                  data-label="Nutritionniste">
+            Nutritionniste
+          </button>
+
+          <button type="button" class="drawer-chip"
+                  data-pack="betty_osteopate"
+                  data-avatar="Betty_osteopate.png"
+                  data-label="Ostéopathe">
+            Ostéopathe
+          </button>
+
+          <button type="button" class="drawer-chip"
+                  data-pack="betty_paysagiste"
+                  data-avatar="Betty_paysagiste.png"
+                  data-label="Paysagiste">
+            Paysagiste
+          </button>
+
+          <button type="button" class="drawer-chip"
+                  data-pack="betty_photographe"
+                  data-avatar="Betty_photographe.png"
+                  data-label="Photographe">
+            Photographe
+          </button>
+
+          <button type="button" class="drawer-chip"
+                  data-pack="betty_plombier"
+                  data-avatar="Betty_plombier.png"
+                  data-label="Plombier">
+            Plombier
+          </button>
+
+          <button type="button" class="drawer-chip"
+                  data-pack="betty_serrurier"
+                  data-avatar="Betty_serrurier.png"
+                  data-label="Serrurier">
+            Serrurier
+          </button>
+
+          <button type="button" class="drawer-chip"
+                  data-pack="betty_sophrologue"
+                  data-avatar="Betty_sophrologue.png"
+                  data-label="Sophrologue">
+            Sophrologue
+          </button>
+
+          <button type="button" class="drawer-chip"
+                  data-pack="betty_soutien_scolaire"
+                  data-avatar="Betty_soutien_scolaire.png"
+                  data-label="Soutien scolaire">
+            Soutien scolaire
+          </button>
+
+          <button type="button" class="drawer-chip"
+                  data-pack="betty_trader"
+                  data-avatar="Betty_trader.png"
+                  data-label="Trader">
+            Trader
+          </button>
+
+          <button type="button" class="drawer-chip"
+                  data-pack="betty_traiteur"
+                  data-avatar="Betty_traiteur.png"
+                  data-label="Traiteur">
+            Traiteur
+          </button>
+
+          <button type="button" class="drawer-chip"
+                  data-pack="betty_verrier"
+                  data-avatar="Betty_verrier.png"
+                  data-label="Verrier">
+            Verrier
+          </button>
+
+          <button type="button" class="drawer-chip"
+                  data-pack="betty_yoga"
+                  data-avatar="Betty_yoga.png"
+                  data-label="Prof de yoga">
+            Prof de yoga
+          </button>
+        </div>
       </div>
     </div>
     <!-- ===== /TIROIR METIER ===== -->
@@ -159,25 +406,43 @@ Horaires : Lun–Ven 9h–12h / 14h–18h"></textarea>
   const packRadios   = document.querySelectorAll('input[type="radio"][name="pack"]');
   const avatarHidden = document.getElementById('avatar-hidden');
   const cards        = document.querySelectorAll('.avatar-card');
+  const metierLabel  = document.getElementById('metier-selected-label');
+
+  function updateMetierLabelFromRadio(radio) {
+    if (!metierLabel || !radio) return;
+    let txt = "";
+
+    const card = radio.closest('.avatar-card');
+    if (card) {
+      const lbl = card.querySelector('.a-label');
+      if (lbl) txt = lbl.textContent.trim();
+    } else if (radio.dataset && radio.dataset.label) {
+      txt = radio.dataset.label;
+    } else if (radio.value) {
+      txt = radio.value.replace(/^betty_/, "").replace(/_/g, " ");
+      txt = txt.charAt(0).toUpperCase() + txt.slice(1);
+    }
+
+    if (!txt) txt = "Avocat";
+    metierLabel.innerHTML = 'Métier sélectionné : <strong>' + txt + '</strong>. Continuez la configuration de votre bot.';
+  }
 
   function applySelection(radio){
-    // 1) avatar (valeur envoyée au backend)
     const file = radio.getAttribute('data-avatar') || 'avocat.jpg';
     avatarHidden.value = file;
 
-    // 2) carte active (surbrillance)
     cards.forEach(c => c.classList.remove('selected'));
     const card = radio.closest('.avatar-card');
     if(card) card.classList.add('selected');
+
+    updateMetierLabelFromRadio(radio);
   }
 
-  // Initialisation (au cas où le serveur prérenseigne un pack)
   document.addEventListener('DOMContentLoaded', () => {
     const checked = document.querySelector('input[name="pack"]:checked');
     if (checked) applySelection(checked);
   });
 
-  // Changement de pack (avatars principaux)
   packRadios.forEach(r => {
     r.addEventListener('change', () => applySelection(r));
     const card = r.closest('.avatar-card');
@@ -193,7 +458,7 @@ Horaires : Lun–Ven 9h–12h / 14h–18h"></textarea>
   const drawerToggle   = document.getElementById('drawer-toggle');
   const drawerPanel    = document.getElementById('drawer-panel');
   const drawerRadio    = document.getElementById('drawer-pack-radio');
-  const drawerItems    = document.querySelectorAll('.drawer-item');
+  const drawerChips    = document.querySelectorAll('.drawer-chip');
 
   if (drawerToggle && drawerPanel) {
     drawerToggle.addEventListener('click', () => {
@@ -207,28 +472,31 @@ Horaires : Lun–Ven 9h–12h / 14h–18h"></textarea>
     });
   }
 
-  drawerItems.forEach(item => {
-    item.addEventListener('click', () => {
-      const pack   = item.dataset.pack;
-      const avatar = item.dataset.avatar;
+  drawerChips.forEach(chip => {
+    chip.addEventListener('click', () => {
+      const pack   = chip.dataset.pack;
+      const avatar = chip.dataset.avatar;
+      const label  = chip.dataset.label || pack;
 
-      // on met à jour le radio caché
+      // radio caché = pack métier
       drawerRadio.value = pack;
       drawerRadio.setAttribute('data-avatar', avatar);
+      drawerRadio.dataset.label = label;
       drawerRadio.checked = true;
 
-      // on applique la sélection (met à jour le hidden avatar + surbrillance)
+      // visuel : on désactive les avatars principaux
+      cards.forEach(c => c.classList.remove('selected'));
+
+      // maj avatar + texte de confirmation
       applySelection(drawerRadio);
 
-      // état visuel dans la liste
-      drawerItems.forEach(i => i.classList.remove('active'));
-      item.classList.add('active');
+      // état visuel des chips
+      drawerChips.forEach(c => c.classList.remove('active'));
+      chip.classList.add('active');
 
-      // on peut refermer le tiroir pour simplifier
-      if (drawerPanel) {
-        drawerPanel.setAttribute('hidden', 'hidden');
-        drawerToggle.classList.remove('open');
-      }
+      // on peut refermer le tiroir si tu veux que ce soit plus fluide
+      drawerPanel.setAttribute('hidden', 'hidden');
+      drawerToggle.classList.remove('open');
     });
   });
 
@@ -264,7 +532,6 @@ Horaires : Lun–Ven 9h–12h / 14h–18h"></textarea>
   joy.addEventListener('touchmove',  moveDrag,  {passive:false});
   window.addEventListener('touchend', endDrag);
 
-  // position initiale au centre
   thumb.style.left = (radius - 10) + 'px';
   thumb.style.top  = (radius - 10) + 'px';
 </script>
