@@ -425,18 +425,26 @@
   <section class="card">
     <h2>Contenus</h2>
     <label class="field">
-      <span>Message d’accueil</span>
-      <input type="text" name="greeting" placeholder="Bonjour, je suis Betty. Comment puis-je vous aider ?">
+      <span>Nom / Entreprise</span>
+      <input type="text" name="info_name" placeholder="Ex : Cabinet Dupont">
     </label>
 
     <label class="field">
-      <span>Informations établissement (téléphone, email, adresse, horaires…)</span>
-      <textarea name="contact_info" rows="4" placeholder="Nom : Cabinet Dupont
-Téléphone : 02 43 XX XX XX
-Email : contact@cabinet-dupont.fr
-Adresse : 12 rue de la République, 72000 Le Mans
-Horaires : Lun–Ven 9h–12h / 14h–18h"></textarea>
+      <span>Téléphone</span>
+      <input type="text" name="info_phone" placeholder="Ex : 02 43 XX XX XX">
     </label>
+
+    <label class="field">
+      <span>Email de contact</span>
+      <input type="email" name="info_email" placeholder="Ex : contact@cabinet-dupont.fr">
+    </label>
+
+    <label class="field">
+      <span>Adresse</span>
+      <textarea name="info_address" rows="3"
+        placeholder="Ex : 12 rue de la République, 72000 Le Mans"></textarea>
+    </label>
+
   </section>
 
   <!-- CTA -->
@@ -589,3 +597,4 @@ Horaires : Lun–Ven 9h–12h / 14h–18h"></textarea>
 </script>
 
 {% endblock %}
+
