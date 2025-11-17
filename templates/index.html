@@ -8,8 +8,17 @@
 </p>
 
 <div class="hero-cta">
-  <a href="{{ url_for('config_page') }}" class="btn primary big">Configurer votre bot métier</a>
-  <a href="#demo" class="btn">Voir la démo</a>
+
+  <p class="trial-note" style="max-width:520px;margin:0 auto 12px;text-align:center;font-size:15px;opacity:.88;">
+    Aucun risque : testez Betty pendant <strong>7 jours gratuitement</strong>, puis décidez si vous souhaitez continuer.
+  </p>
+
+  <!-- Nouveau bouton : essai gratuit 7 jours -->
+  <a href="https://buy.stripe.com/5kQ14f78edUTbiH7D83ks00"
+     class="btn primary big">
+    Essayer Betty 7 jours gratuitement
+  </a>
+
 </div>
 
 <!-- Bandeau de confiance -->
@@ -160,9 +169,15 @@
     </form>
   </div>
 </div>
+<p class="trial-note" style="max-width:520px;margin:0 auto 12px;text-align:center;font-size:15px;opacity:.88;">
+  Profitez de <strong>7 jours d’essai gratuit</strong> avant de vous engager.
+</p>
 
 <div class="hero-cta" style="margin-top:24px">
   <a href="{{ url_for('config_page') }}" class="btn primary big">Je crée mon bot maintenant</a>
+</div>
+<div style="text-align:center;font-size:13px;opacity:.7;margin-top:4px;">
+  Paiement sécurisé Stripe • Sans engagement • Annulable en 1 clic
 </div>
 
 <script>
@@ -272,6 +287,7 @@
 </script>
 
 {% endblock %}
+
 
 
 
