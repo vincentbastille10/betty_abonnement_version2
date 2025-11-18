@@ -32,8 +32,8 @@
     Aucun risque : testez Betty pendant <strong>7 jours gratuitement</strong>, puis décidez si vous souhaitez continuer.
   </p>
 
-  <!-- Bouton essai gratuit 7 jours -> va vers la page de configuration -->
-  <a href="{{ url_for('config_page') }}"
+  <!-- Bouton essai gratuit 7 jours -> lien Stripe -->
+  <a href="https://buy.stripe.com/5kQ14f78edUTbiH7D83ks00"
      class="btn primary big"
      style="display:inline-block;margin:0 auto;">
     Essayer Betty 7 jours gratuitement
@@ -186,7 +186,9 @@
 </p>
 
 <div class="hero-cta" style="margin-top:24px;text-align:center;">
-  <a href="{{ url_for('config_page') }}" class="btn primary big" style="display:inline-block;margin:0 auto;">Je crée mon bot maintenant</a>
+  <a href="https://buy.stripe.com/5kQ14f78edUTbiH7D83ks00"
+     class="btn primary big"
+     style="display:inline-block;margin:0 auto;">Je crée mon bot maintenant</a>
 </div>
 <div style="text-align:center;font-size:13px;opacity:.7;margin-top:4px;">
   Paiement sécurisé Stripe • Sans engagement • Annulable en 1 clic
@@ -303,4 +305,3 @@
 </script>
 
 {% endblock %}
-
