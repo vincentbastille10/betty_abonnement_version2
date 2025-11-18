@@ -126,7 +126,7 @@
     <p class="desc">
       Vous êtes sur le point d’activer votre bot <strong>Betty</strong>.<br>
       Après validation, vous serez redirigé vers la page de paiement Stripe<br>
-      (<strong>29,99 €/mois</strong> – sans engagement).
+      (<strong>7 jours d’essai gratuits, puis 29,99 €/mois</strong> – sans engagement).
     </p>
 
     {# ✅ IMPORTANT : Rejouer la query-string au POST pour que request.args reste peuplé côté Python #}
@@ -156,7 +156,7 @@
     <p class="footer">propulsé par <strong>Spectra Media AI</strong></p>
   </div>
 
-  <!-- ✅ Robuste : on normalise + on persiste l’email localement en secours -->
+  <!-- ✅ Robuste : on normalise + on persiste l’email localement, on POST au backend, puis on redirige vers Stripe 7j -->
   <script>
     (function(){
       const form  = document.getElementById('inscription-form');
@@ -169,9 +169,17 @@
         if (!email.value && saved) email.value = saved;
       } catch(e) {}
 
-      form.addEventListener('submit', function(ev){
+      form.addEventListener('submit', async function(ev){
+        ev.preventDefault(); // ⬅️ on prend la main sur le submit
+
         // Normalisation douce : trim
         email.value = (email.value || '').trim();
+        if (!email.value) {
+          alert("Merci de saisir un email professionnel.");
+          email.focus();
+          return;
+        }
+
         // Miroir invisible
         mir.value = email.value;
 
@@ -180,7 +188,25 @@
           localStorage.setItem('betty_last_email', email.value);
           sessionStorage.setItem('betty_last_email', email.value);
         } catch(e) {}
-      }, {passive:true});
+
+        // ✅ On envoie quand même les données au backend (inscription_page) pour que ton Python garde tout
+        try {
+          const formData = new FormData(form);
+          await fetch(form.action, {
+            method: 'POST',
+            body: formData,
+            credentials: 'same-origin'
+          });
+        } catch (e) {
+          // On ignore les erreurs ici pour ne pas bloquer la vente
+          console.warn('Erreur lors de l’enregistrement côté serveur :', e);
+        }
+
+        // ✅ Puis on redirige vers Stripe 7 jours gratuits, avec l’email en paramètre
+        const stripeBase = "https://buy.stripe.com/5kQ14f78edUTbiH7D83ks00";
+        const stripeUrl  = stripeBase + "?client_email=" + encodeURIComponent(email.value);
+        window.location.href = stripeUrl;
+      });
     })();
   </script>
 </body>
