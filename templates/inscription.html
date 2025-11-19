@@ -157,58 +157,8 @@
   </div>
 
   <!-- ✅ Robuste : on normalise + on persiste l’email localement, on POST au backend, puis on redirige vers Stripe 7j -->
-  <script>
-    (function(){
-      const form  = document.getElementById('inscription-form');
-      const email = document.getElementById('email');
-      const mir   = document.getElementById('email_mirror');
 
-      // Pré-remplir depuis localStorage si retour navigateur
-      try {
-        const saved = localStorage.getItem('betty_last_email') || sessionStorage.getItem('betty_last_email') || '';
-        if (!email.value && saved) email.value = saved;
-      } catch(e) {}
-
-      form.addEventListener('submit', async function(ev){
-        ev.preventDefault(); // ⬅️ on prend la main sur le submit
-
-        // Normalisation douce : trim
-        email.value = (email.value || '').trim();
-        if (!email.value) {
-          alert("Merci de saisir un email professionnel.");
-          email.focus();
-          return;
-        }
-
-        // Miroir invisible
-        mir.value = email.value;
-
-        // Persistance locale (secours en cas de navigation/retour)
-        try {
-          localStorage.setItem('betty_last_email', email.value);
-          sessionStorage.setItem('betty_last_email', email.value);
-        } catch(e) {}
-
-        // ✅ On envoie quand même les données au backend (inscription_page) pour que ton Python garde tout
-        try {
-          const formData = new FormData(form);
-          await fetch(form.action, {
-            method: 'POST',
-            body: formData,
-            credentials: 'same-origin'
-          });
-        } catch (e) {
-          // On ignore les erreurs ici pour ne pas bloquer la vente
-          console.warn('Erreur lors de l’enregistrement côté serveur :', e);
-        }
-
-        // ✅ Puis on redirige vers Stripe 7 jours gratuits, avec l’email en paramètre
-        const stripeBase = "https://buy.stripe.com/5kQ14f78edUTbiH7D83ks00";
-        const stripeUrl  = stripeBase + "?client_email=" + encodeURIComponent(email.value);
-        window.location.href = stripeUrl;
-      });
-    })();
-  </script>
 </body>
 </html>
 {% endblock %}
+
