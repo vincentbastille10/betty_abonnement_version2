@@ -496,6 +496,65 @@ def send_lead_email(to_email: str, lead: dict, bot_name: str = "Betty Bot"):
     except Exception as e:
         print("[LEAD][MAILJET][EXC]", type(e).__name__, e)
 
+# ⬇⬇⬇ COLLE ICI la nouvelle fonction ⬇⬇⬇
+
+def send_purchase_email(to_email: str, bot: dict):
+    """
+    Email envoyé APRÈS l'achat, avec le code du bot et le code d'intégration.
+    """
+    if not (MJ_API_KEY and MJ_API_SECRET and to_email):
+        print("[PURCHASE][MAILJET] Config manquante ou email vide, email non envoyé.")
+        return
+
+    public_id = bot.get("public_id") or ""
+    pack      = bot.get("pack") or "bot métier"
+    name      = bot.get("name") or "Betty Bot"
+
+    embed_url = f"{BASE_URL}/chat?public_id={public_id}&embed=1"
+
+    iframe_snippet = (
+        f'<iframe src="{embed_url}" title="{name}" '
+        'style="width:100%;max-width:420px;height:620px;border:0;border-radius:16px;'
+        'box-shadow:0 10px 30px rgba(0,0,0,.25);background:#0b0f1e;" '
+        'loading="lazy" referrerpolicy="no-referrer-when-downgrade" '
+        'allow="clipboard-read; clipboard-write; microphone; autoplay"></iframe>'
+    )
+
+    subject = f"Votre bot Betty ({pack}) est activé ✅"
+    text = (
+        f"Bonjour,\n\n"
+        f"Merci pour votre abonnement à Betty Bots.\n\n"
+        f"Voici les informations de votre bot :\n"
+        f"- Métier : {pack}\n"
+        f"- Nom du bot : {name}\n"
+        f"- Code public : {public_id}\n"
+        f"- Lien de test : {embed_url}\n\n"
+        "Pour intégrer Betty sur votre site, copiez/collez ce code HTML :\n\n"
+        f"{iframe_snippet}\n\n"
+        "À très vite,\n"
+        "Spectra Media AI\n"
+    )
+
+    payload = {
+        "Messages": [{
+            "From": {"Email": MJ_FROM_EMAIL, "Name": MJ_FROM_NAME},
+            "To":   [{"Email": to_email}],
+            "Subject": subject,
+            "TextPart": text
+        }]
+    }
+
+    try:
+        r = requests.post(
+            "https://api.mailjet.com/v3.1/send",
+            auth=(MJ_API_KEY, MJ_API_SECRET),
+            json=payload,
+            timeout=15
+        )
+        print("[PURCHASE][MAILJET]", "OK" if r.ok else f"KO {r.status_code} {r.text[:200]}")
+    except Exception as e:
+        print("[PURCHASE][MAILJET][EXC]", type(e).__name__, e)
+
 # ==== Bots en mémoire ====
 BOTS = {
     "avocat-001":  {"pack":"avocat","name":"Betty Bot (Avocat)","color":"#4F46E5","avatar_file":"avocat.jpg","profile":{},"greeting":"","buyer_email":None,"owner_name":None,"public_id":None},
