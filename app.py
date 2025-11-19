@@ -784,6 +784,17 @@ def recap_page():
         "iframe_snippet": iframe_snippet,
     }
 
+    # --- Envoi de l'email d'achat (une seule fois par bot) ---
+    if buyer and public_id:
+        flag_key = f"purchase_email_sent_{public_id}"
+        if not session.get(flag_key):
+            try:
+                send_purchase_email(to_email=buyer, bot=bot)
+                session[flag_key] = True
+                app.logger.info(f"[PURCHASE] Email d'achat envoyé à {buyer} pour le bot {public_id}")
+            except Exception as e:
+                app.logger.exception(f"[PURCHASE] Erreur envoi email d'achat -> {e}")
+
     try:
         return render_template(
             "recap.html",
