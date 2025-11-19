@@ -704,6 +704,7 @@ def inscription_page():
                 mode="subscription",
                 line_items=[{"price": PRICE_ID, "quantity": 1}],
                 customer_email=email,
+                subscription_data={"trial_period_days": 7},
                 success_url=f"{BASE_URL}/recap?pack={pack}&public_id={public_id}&session_id={{CHECKOUT_SESSION_ID}}",
                 cancel_url=f"{BASE_URL}/inscription?pack={pack}&color={color}&avatar={avatar}",
                 metadata={
