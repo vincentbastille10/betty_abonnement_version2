@@ -302,14 +302,9 @@
       addBubble("Désolé, une erreur est survenue.");
     }
   });
-
-  // On force le focus visuel en haut de la page au chargement ET après 2 secondes
-  window.addEventListener('load', ()=>{
-    window.scrollTo(0, 0);
-    setTimeout(()=>window.scrollTo(0, 0), 2000);
-  });
 </script>
-
 {% endblock %}
+
+
 
 
