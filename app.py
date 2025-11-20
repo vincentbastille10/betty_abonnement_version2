@@ -880,8 +880,10 @@ def bettybot_reply():
         history = session.get(key, [])
     history = history[-6:]
 
-    # Choix du prompt : Demo vs Acheté
+    # --- Détection mode démo ---
     demo_mode = (public_id == "spectra-demo")
+
+    # --- Choix du prompt : Demo vs Acheté ---
     if demo_mode:
         system_prompt = """
 Tu es Betty, l’assistante virtuelle de Spectra Media AI. Tu es la démo officielle de Betty Bots.
@@ -905,16 +907,16 @@ Adaptation au métier :
 - Tu illustres avec des exemples concrets liés à son activité, sans entrer dans des détails techniques.
 
 Récupération du lead :
-- Ton autre priorité est d’obtenir au minimum :
+- Tu peux proposer par exemple :
+  - une démo personnalisée envoyée par e-mail,
+  - un exemple de script adapté à son métier,
+  - ou un accompagnement pour installer Betty.
+- Tu cherches à récupérer au minimum :
   - prénom + nom,
   - activité,
   - ville,
   - adresse e-mail,
   - et si possible le numéro de téléphone.
-- Tu peux proposer par exemple :
-  - une démo personnalisée envoyée par e-mail,
-  - un exemple de script adapté à son métier,
-  - ou un accompagnement pour installer Betty.
 
 Important :
 - Tu restes persuasive mais jamais agressive.
@@ -930,16 +932,68 @@ Important :
             bot.get("greeting", "") or "Bonjour, qu’est-ce que je peux faire pour vous ?"
         )
 
+    # --- Appel LLM ---
+    llm_text = call_llm_with_history(
+        system_prompt=system_prompt,
+        history=history,
+        user_input=user_input
+    )
 
-    # Appel LLM (réponse brute potentiellement enrichie par garde-fous)
-    llm_text = call_llm_with_history(system_prompt=system_prompt, history=history, user_input=user_input)
+    # Fallback si le modèle ne répond pas
     if not llm_text:
-        llm_text = rule_based_next_question(bot.get("pack",""), history + [{"role":"user","content": user_input}])
+        if demo_mode:
+            llm_text = (
+                "Je suis Betty, l’assistante virtuelle de démonstration de Spectra Media AI. "
+                "Je montre comment un bot peut accueillir vos clients, répondre à leurs questions "
+                "et récupérer leurs coordonnées pour vous."
+            )
+        else:
+            llm_text = rule_based_next_question(
+                bot.get("pack", ""),
+                history + [{"role": "user", "content": user_input}]
+            )
 
-    # Garde-fous (séquence RDV + consentement)
-    response_text, lead, should_send_now, stage = guardrailed_reply(history, user_input, llm_text, bot.get("pack",""))
+    # ======================
+    #  DEMO MODE : plus de garde-fous agressifs
+    # ======================
+    if demo_mode:
+        # On extrait juste un éventuel LEAD_JSON si un jour on en met dans le prompt
+        response_text, _ = extract_lead_json(llm_text or "")
+        response_text = (response_text or "").strip()
 
-    # Persistance de l'historique
+        # Cas typique : "qui es tu ?"
+        if not response_text or len(response_text) < 4:
+            if re.search(r"\b(qui es[- ]?tu|t'es qui|tu es qui)\b", user_input.lower()):
+                response_text = (
+                    "Je suis Betty, l’assistante virtuelle de démonstration de Spectra Media AI. "
+                    "Je te montre comment un bot peut accueillir tes clients, répondre à leurs questions "
+                    "et t’envoyer leurs coordonnées qualifiées automatiquement."
+                )
+            else:
+                response_text = (
+                    "Je suis Betty, l’assistante AI de démonstration. "
+                    "Je montre comment un bot peut qualifier les demandes de tes clients "
+                    "et t’envoyer leurs coordonnées sans que tu aies à tout gérer toi-même."
+                )
+
+        # On garde les messages courts
+        response_text = enforce_single_question(response_text)
+
+        # Extraction légère du lead (nom, email, téléphone…) pour t’envoyer un mail si complet
+        augmented_history = history + [{"role": "user", "content": user_input}]
+        lead = _lead_from_history(augmented_history)
+        stage = lead.get("stage", "collecting")
+        should_send_now = False  # on laisse la condition globale décider
+
+    else:
+        # ======================
+        #  MODE BOT ACHETÉ : garde-fous RDV + séquence nom/tel/email
+        # ======================
+        response_text, lead, should_send_now, stage = guardrailed_reply(
+            history, user_input, llm_text, bot.get("pack", "")
+        )
+
+    # --- Persistance historique ---
     history.append({"role": "user", "content": user_input})
     history.append({"role": "assistant", "content": response_text})
     if conv_id:
@@ -947,9 +1001,7 @@ Important :
     else:
         session[f"conv_{public_id or bot_key}"] = history
 
-    # Résolution de l'adresse de destination
-    # - Démo : DEMO_LEAD_EMAIL -> DEFAULT_LEAD_EMAIL -> MJ_FROM_EMAIL
-    # - Acheté : email stocké (buyer_email), sinon DEFAULT/MJ_FROM_EMAIL
+    # --- Résolution de l'adresse de destination pour les leads ---
     default_fallback = os.getenv("DEFAULT_LEAD_EMAIL", "").strip() or MJ_FROM_EMAIL
     if demo_mode:
         buyer_email_ctx = (DEMO_LEAD_EMAIL or default_fallback)
@@ -961,16 +1013,32 @@ Important :
             or default_fallback
         )
 
-    # Conditions d'envoi mail
-    have_any_info = any([lead.get("name"), lead.get("email"), lead.get("phone"), lead.get("reason")])
-    may_send = (stage == "ready") or (should_send_now and have_any_info)
+    # --- Conditions d'envoi mail ---
+    have_any_info = any([
+        isinstance(lead, dict) and lead.get("name"),
+        isinstance(lead, dict) and lead.get("email"),
+        isinstance(lead, dict) and lead.get("phone"),
+        isinstance(lead, dict) and lead.get("reason"),
+    ])
 
-    if may_send:
+    effective_stage = None
+    if isinstance(lead, dict):
+        effective_stage = (
+            "ready" if (lead.get("phone") and lead.get("name") and lead.get("email"))
+            else lead.get("stage", "collecting")
+        )
+
+    may_send = (
+        (effective_stage == "ready")
+        or (not demo_mode and should_send_now and have_any_info)
+        or (demo_mode and effective_stage == "ready")
+    )
+
+    if may_send and isinstance(lead, dict):
         if not buyer_email_ctx:
             app.logger.warning(f"[LEAD] buyer_email introuvable pour bot_id={public_id or 'N/A'} ; email non envoyé.")
         else:
             try:
-                effective_stage = "ready" if (lead.get("phone") and lead.get("name") and lead.get("email")) else "partial"
                 send_lead_email(
                     to_email=buyer_email_ctx,
                     lead={
@@ -979,30 +1047,30 @@ Important :
                         "email": lead.get("email", ""),
                         "phone": lead.get("phone", ""),
                         "availability": lead.get("availability", ""),
-                        "stage": effective_stage,
+                        "stage": effective_stage or "ready",
                     },
                     bot_name=(bot or {}).get("name") or ("Betty Bot (Démo)" if demo_mode else "Betty Bot"),
                 )
-                lead["stage"] = effective_stage
-                app.logger.info(f"[LEAD] Email ({effective_stage}) envoyé à {buyer_email_ctx} pour bot {public_id or ('demo' if demo_mode else 'N/A')}")
+                if isinstance(lead, dict):
+                    lead["stage"] = effective_stage or "ready"
+                app.logger.info(f"[LEAD] Email ({effective_stage or 'ready'}) envoyé à {buyer_email_ctx} pour bot {public_id or ('demo' if demo_mode else 'N/A')}")
             except Exception as e:
                 app.logger.exception(f"[LEAD] Erreur envoi email -> {e}")
 
     return jsonify({
         "response": response_text,
-        "stage": lead.get("stage") if isinstance(lead, dict) else None
+        "stage": (lead.get("stage") if isinstance(lead, dict) else None)
     })
-
-# ==== Meta/API utilitaires ====
 @app.route("/api/embed_meta")
 def embed_meta():
     public_id = (request.args.get("public_id") or "").strip()
     if not public_id:
         return jsonify({"error": "missing public_id"}), 400
+
     _, bot = find_bot_by_public_id(public_id)
     if not bot:
         return jsonify({"error": "bot_not_found"}), 404
-    # IMPORTANT : on **n’expose pas** l’adresse acheteur ici
+
     return jsonify({
         "bot_id": public_id,
         "owner_name": bot.get("owner_name") or "Client",
